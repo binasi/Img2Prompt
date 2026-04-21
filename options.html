@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ImgPrompt</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #09090d;
+        --panel: rgba(18, 18, 22, 0.92);
+        --panel-soft: rgba(255, 255, 255, 0.04);
+        --line: rgba(255, 255, 255, 0.08);
+        --line-soft: rgba(255, 255, 255, 0.06);
+        --text: #f8fafc;
+        --muted: rgba(255, 255, 255, 0.5);
+        --accent: linear-gradient(90deg, #8bd3ff, #ffc85f 55%, #f09cc0);
+        --success: #9ae6b4;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(255, 215, 135, 0.08), transparent 22%),
+          radial-gradient(circle at top right, rgba(139, 211, 255, 0.08), transparent 24%),
+          linear-gradient(180deg, #0f0f13, #09090d 58%, #050507);
+      }
+      .shell {
+        padding: 14px;
+      }
+      .panel {
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        overflow: visible;
+      }
+      .inner {
+        padding: 0;
+      }
+      .header {
+        position: relative;
+        display: grid;
+        gap: 4px;
+        margin-bottom: 16px;
+      }
+      .title {
+        margin: 0;
+        font-size: 32px;
+        line-height: 0.95;
+        font-weight: 600;
+        letter-spacing: -0.05em;
+      }
+      .subtitle {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .version {
+        position: absolute;
+        top: 0;
+        right: 0;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--muted);
+        opacity: 0.6;
+        letter-spacing: 0.02em;
+      }
+      .stack {
+        display: grid;
+        gap: 10px;
+      }
+      .section {
+        padding: 14px;
+        border-radius: 22px;
+        background: var(--panel-soft);
+        border: 1px solid var(--line-soft);
+      }
+      .section-head {
+        display: grid;
+        gap: 4px;
+        margin-bottom: 12px;
+      }
+      .section-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .section-note {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+      .collapsible {
+        padding: 0;
+        overflow: hidden;
+      }
+      .collapsible summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px;
+        cursor: default;
+      }
+      .collapsible summary::-webkit-details-marker {
+        display: none;
+      }
+      .collapsible-copy {
+        display: grid;
+        gap: 4px;
+      }
+      .collapsible-arrow {
+        width: 28px;
+        height: 28px;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.72);
+        transition: transform 180ms ease, background 180ms ease;
+        cursor: pointer;
+        border: none;
+        padding: 0;
+        outline: none;
+      }
+      .collapsible[open] .collapsible-arrow {
+        transform: rotate(180deg);
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .collapsible-body {
+        padding: 14px;
+        border-top: 1px solid var(--line-soft);
+      }
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      label {
+        display: grid;
+        gap: 7px;
+      }
+      .label {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      input,
+      textarea {
+        width: 100%;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        padding: 13px 14px;
+        font: inherit;
+        outline: none;
+        transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+        backdrop-filter: blur(8px);
+      }
+      input::placeholder,
+      textarea::placeholder {
+        color: rgba(148, 163, 184, 0.6);
+      }
+      input:focus,
+      textarea:focus {
+        border-color: rgba(255, 255, 255, 0.14);
+        box-shadow: 0 0 0 3px rgba(139, 211, 255, 0.12);
+        transform: translateY(-1px);
+      }
+      textarea {
+        min-height: 132px;
+        resize: vertical;
+        line-height: 1.65;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148, 163, 184, 0.55) rgba(255, 255, 255, 0.06);
+      }
+      textarea::-webkit-scrollbar {
+        width: 6px;
+      }
+      textarea::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 999px;
+      }
+      textarea::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.5);
+        border-radius: 999px;
+      }
+      ::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 2px 0;
+      }
+      .toggle-copy {
+        display: grid;
+        gap: 4px;
+      }
+      .toggle-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .toggle-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+      .switch {
+        position: relative;
+        display: inline-flex;
+        flex: 0 0 auto;
+      }
+      .switch input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .switch-track {
+        width: 46px;
+        height: 28px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid var(--line);
+        transition: background 180ms ease, border-color 180ms ease;
+      }
+      .switch-thumb {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        background: #f8fafc;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        transition: transform 180ms ease, background 180ms ease;
+      }
+      .switch input:checked + .switch-track {
+        background: linear-gradient(90deg, rgba(139, 211, 255, 0.84), rgba(240, 156, 192, 0.84));
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+      .switch input:checked + .switch-track + .switch-thumb {
+        transform: translateX(18px);
+        background: #111014;
+      }
+      .actions {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .footer {
+        margin-top: 14px;
+        padding: 0 4px 4px;
+        font-size: 12px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .footer a {
+        display: inline-block;
+        color: rgba(255, 255, 255, 0.78);
+        text-decoration: none;
+      }
+      .footer a:hover {
+        color: var(--text);
+      }
+      .action-group {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+      }
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 11px 16px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 160ms ease, opacity 160ms ease;
+      }
+      button:hover {
+        transform: translateY(-1px);
+      }
+      .primary {
+        color: #111014;
+        background: var(--accent);
+        box-shadow: 0 14px 30px rgba(255, 193, 94, 0.16);
+      }
+      .secondary {
+        min-width: 148px;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid var(--line);
+      }
+      #status {
+        min-height: 18px;
+        font-size: 12px;
+        color: var(--success);
+        text-align: left;
+      }
+      .preset-chip {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--muted);
+        cursor: pointer;
+        transition: all 150ms ease;
+        line-height: 1;
+      }
+      .preset-chip:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text);
+      }
+      .preset-chip.active {
+        background: rgba(139, 211, 255, 0.15);
+        color: #8bd3ff;
+        border-color: rgba(139, 211, 255, 0.3);
+      }
+      /* Custom dropdown styles */
+      .custom-select {
+        position: relative;
+        min-width: 110px;
+      }
+      .custom-select-trigger {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: #f8fafc;
+        padding: 9px 14px;
+        border-radius: 18px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 160ms ease;
+        backdrop-filter: blur(8px);
+        user-select: none;
+      }
+      .custom-select-trigger:hover {
+        background: rgba(255,255,255,0.06);
+        border-color: rgba(255,255,255,0.12);
+      }
+      .custom-select-trigger::after {
+        content: '';
+        width: 0;
+        height: 0;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-top: 6px solid #f8fafc;
+        margin-left: 8px;
+        transition: transform 160ms ease;
+      }
+      .custom-select.open .custom-select-trigger::after {
+        transform: rotate(180deg);
+      }
+      .custom-select-dropdown {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: rgba(15, 15, 19, 0.96);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 18px;
+        padding: 6px;
+        z-index: 100;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-8px);
+        transition: all 160ms ease;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      }
+      .custom-select.open .custom-select-dropdown {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+      .custom-select-option {
+        padding: 9px 14px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 500;
+        color: rgba(248, 250, 252, 0.85);
+        cursor: pointer;
+        transition: all 150ms ease;
+        text-align: center;
+      }
+      .custom-select-option:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #f8fafc;
+      }
+      .custom-select-option.selected {
+        background: linear-gradient(90deg, rgba(139, 211, 255, 0.2), rgba(240, 156, 192, 0.2));
+        color: #f8fafc;
+        font-weight: 600;
+      }
+      select {
+        color-scheme: dark;
+      }
+      select option,
+      select optgroup {
+        background-color: #0f0f13 !important;
+        color: #f8fafc !important;
+      }
+      select option:checked {
+        background: linear-gradient(90deg, rgba(139, 211, 255, 0.25), rgba(240, 156, 192, 0.25)) !important;
+        color: #f8fafc !important;
+      }
+      /* Windows系统特殊处理 */
+      @media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+        select option {
+          background-color: #0f0f13 !important;
+          color: #f8fafc !important;
+        }
+      }
+      /* MacOS系统特殊处理 */
+      @supports (-webkit-appearance: none) {
+        select option {
+          background-color: #0f0f13 !important;
+          color: #f8fafc !important;
+        }
+      }
+      @media (max-width: 640px) {
+        .grid.two {
+          grid-template-columns: 1fr;
+        }
+        .actions {
+          justify-content: center;
+        }
+        #status {
+          text-align: left;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <div class="inner">
+          <header class="header">
+            <h1 class="title" data-i18n="imgprompt-title">ImgPrompt</h1>
+            <p class="subtitle" data-i18n="imgprompt-subtitle">Image to Prompt</p>
+            <span class="version" id="version-display"></span>
+          </header>
+
+          <form id="settings-form">
+            <div class="stack">
+              <details class="section collapsible">
+                <summary style="cursor: pointer;">
+                  <div class="collapsible-copy" style="flex: 1;">
+                    <h2 class="section-title" data-i18n="connection-section-title">Connection</h2>
+                    <p class="section-note" data-i18n="connection-section-note">填入接口地址、模型和密钥。</p>
+                  </div>
+                  <div class="collapsible-arrow" aria-label="Toggle Section" style="pointer-events: none;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+                </summary>
+                <div class="collapsible-body">
+                  <div class="grid two">
+                    <label>
+                      <span class="label" data-i18n="endpoint-label">API Endpoint</span>
+                      <input id="apiEndpoint" name="apiEndpoint" type="url" required placeholder="https://..." data-i18n="endpoint-label" />
+                      <span class="hint" data-i18n="endpoint-hint">常见兼容接口为 /v1/chat/completions</span>
+                    </label>
+                    <label>
+                      <span class="label" data-i18n="model-label">Model</span>
+                      <input id="model" name="model" type="text" required placeholder="gpt-5-mini" data-i18n="model-label" />
+                      <span class="hint" data-i18n="model-hint">例如 gpt-5-mini 或 gemini-2.5-pro</span>
+                    </label>
+                  </div>
+                  <div class="grid" style="margin-top: 12px;">
+                    <label>
+                      <span class="label" data-i18n="key-label">API Key</span>
+                      <input id="apiKey" name="apiKey" type="password" required placeholder="sk-..." data-i18n="key-label" />
+                      <span class="hint" data-i18n="key-hint">仅保存在本地浏览器中</span>
+                    </label>
+                  </div>
+                </div>
+              </details>
+
+              <section class="section">
+                <div class="section-head">
+                  <h2 class="section-title" data-i18n="prompt-section-title">Prompt</h2>
+                  <p class="section-note" data-i18n="prompt-section-note">System 控制输出，User 描述任务。</p>
+                </div>
+                
+                <div class="preset-chips" style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-start; margin-top: 14px;">
+                  <button type="button" class="preset-chip active" data-preset="general" data-i18n="preset-general">通用</button>
+                  <button type="button" class="preset-chip" data-preset="photo" data-i18n="preset-photo">📸 摄影</button>
+                  <button type="button" class="preset-chip" data-preset="cg" data-i18n="preset-cg">🎨 插画CG</button>
+                  <button type="button" class="preset-chip" data-preset="design" data-i18n="preset-design">📐 平面设计</button>
+                  <button type="button" class="preset-chip" data-preset="ui" data-i18n="preset-ui">📱 界面 UI</button>
+                  <button type="button" class="preset-chip" data-preset="assets3d" data-i18n="preset-3d">🧊 游戏资产</button>
+                  <button type="button" class="preset-chip" data-preset="product" data-i18n="preset-product">👕 电商产品</button>
+                  <button type="button" id="btn-add-custom" class="preset-chip" style="border-style: dashed;" data-preset="+add" data-i18n="preset-add-custom">➕ 添加自定义</button>
+                </div>
+
+                <div id="custom-mode-view" style="display: none; flex-direction: column; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed rgba(255, 255, 255, 0.1);">
+                  <label>
+                    <span class="label" data-i18n="custom-title-label">标题</span>
+                    <input id="customTitle" type="text" placeholder="您的自定义名称..." data-i18n="custom-title-placeholder" />
+                  </label>
+                  <label>
+                    <span class="label" data-i18n="user-prompt-label">User Prompt</span>
+                    <textarea id="userPrompt" name="userPrompt"></textarea>
+                  </label>
+                  <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;">
+                    <button type="button" id="btn-custom-delete" class="secondary" style="display:none; color: #ff6b6b; border-color: rgba(255, 107, 107, 0.3); min-width: auto; padding: 8px 14px;" data-i18n="custom-delete-btn">🗑️ 删除</button>
+                    <div style="flex: 1;"></div>
+                    <button type="button" id="btn-custom-cancel" class="secondary" style="min-width: auto; padding: 8px 16px;" data-i18n="custom-cancel-btn">取消</button>
+                    <button type="button" id="btn-custom-save" class="primary" style="padding: 8px 16px;" data-i18n="custom-save-btn">保存</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="section">
+                <div class="section-head">
+                  <h2 class="section-title" data-i18n="experience-section-title">Experience</h2>
+                  <p class="section-note" data-i18n="experience-section-note">控制网页中的悬浮入口显示方式。</p>
+                </div>
+
+                <div class="toggle-row" style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft);">
+                  <div class="toggle-copy">
+                    <div class="toggle-title" data-i18n="language-label">面板语言</div>
+                    <div class="toggle-note" data-i18n="language-note">切换设置面板的显示语言。</div>
+                  </div>
+                  <div class="ipi-switches" style="display: flex; gap: 6px; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 999px;">
+                    <style>
+                      .lang-btn {
+                        border: 0;
+                        padding: 6px 12px;
+                        border-radius: 999px;
+                        font-size: 11px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        background: transparent;
+                        color: var(--muted);
+                        transition: all 160ms ease;
+                        white-space: nowrap;
+                      }
+                      .lang-btn.active {
+                        background: rgba(255,255,255,0.95);
+                        color: #111014;
+                      }
+                      input[name="uiLanguage"] {
+                        display: none;
+                      }
+                    </style>
+                    <label style="display: inline-block; gap: 0;">
+                      <input type="radio" name="uiLanguage" value="zh" checked>
+                      <div class="lang-btn active">中文</div>
+                    </label>
+                    <label style="display: inline-block; gap: 0;">
+                      <input type="radio" name="uiLanguage" value="en">
+                      <div class="lang-btn">EN</div>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="toggle-row">
+                  <div class="toggle-copy">
+                    <div class="toggle-title" data-i18n="toggle-hover-title">悬浮 PicPrompt 按钮</div>
+                    <div class="toggle-note" data-i18n="toggle-hover-note">鼠标移到图片上时显示快捷入口。</div>
+                  </div>
+                  <label class="switch" aria-label="切换悬浮 PicPrompt 按钮">
+                    <input id="hoverButtonEnabled" name="hoverButtonEnabled" type="checkbox" />
+                    <span class="switch-track"></span>
+                    <span class="switch-thumb"></span>
+                  </label>
+                </div>
+
+                <div class="toggle-row" style="margin-top: 14px; border-top: 1px solid var(--line-soft); padding-top: 14px;">
+                  <div class="toggle-copy">
+                    <div class="toggle-title" data-i18n="toggle-snipping-title">截屏提取提示词</div>
+                    <div class="toggle-note" data-i18n="toggle-snipping-note">使用快捷键对网页进行框选截图分析。</div>
+                  </div>
+                  <label class="switch" aria-label="切换截屏提取提示词">
+                    <input id="snippingShortcutEnabled" name="snippingShortcutEnabled" type="checkbox" />
+                    <span class="switch-track"></span>
+                    <span class="switch-thumb"></span>
+                  </label>
+                </div>
+                <p class="section-note" data-i18n="shortcut-hint" style="margin-top: 8px; font-size: 11px; opacity: 0.8;">默认快捷键：Alt / Option + S 。如需修改，请前往 chrome://extensions/shortcuts</p>
+
+              </section>
+
+              <section class="section">
+                <div class="section-head">
+                  <h2 class="section-title" data-i18n="compatibility-section-title">兼容性设置</h2>
+                  <p class="section-note" data-i18n="compatibility-section-note">如果遇到 400 报错，请尝试调整以下设置。</p>
+                </div>
+
+                <div class="toggle-row">
+                  <div class="toggle-copy">
+                    <div class="toggle-title" data-i18n="resolution-label">图片分辨率限制</div>
+                    <div class="toggle-note" data-i18n="resolution-note">降低分辨率可减小请求体积，防止接口超时或拒绝。</div>
+                  </div>
+                  <div class="custom-select" id="resolution-select">
+                    <div class="custom-select-trigger" id="1024px">1024px</div>
+                    <div class="custom-select-dropdown">
+                      <div class="custom-select-option" data-value="512">512px</div>
+                      <div class="custom-select-option" data-value="768">768px</div>
+                      <div class="custom-select-option selected" data-value="1024">1024px</div>
+                      <div class="custom-select-option" data-value="1280">1280px</div>
+                    </div>
+                    <!-- Hidden select for form submission -->
+                    <select id="maxImageEdge" name="maxImageEdge" style="position: absolute; opacity: 0; pointer-events: none;">
+                      <option value="512">512px</option>
+                      <option value="768">768px</option>
+                      <option value="1024" selected>1024px</option>
+                      <option value="1280">1280px</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+
+              <section class="section" id="history-section">
+                <div class="section-head" style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <h2 class="section-title" data-i18n="historyTitle">历史记录</h2>
+                  </div>
+                  <button type="button" id="btn-clear-history" class="secondary" style="min-width: auto; padding: 6px 12px; font-size: 11px; color: #ff6b6b; border-color: rgba(255, 107, 107, 0.3);" data-i18n="historyClear">清空全部</button>
+                </div>
+                <div id="history-list" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+                  <p id="history-empty" style="text-align: center; color: var(--muted); font-size: 13px; padding: 20px 0;" data-i18n="historyEmpty">暂无历史记录</p>
+                </div>
+              </section>
+            </div>
+
+            <div class="actions">
+              <div id="status"></div>
+              <div class="action-group">
+                <button class="secondary" type="button" id="reset-defaults" data-i18n="reset-button">恢复默认</button>
+              </div>
+            </div>
+          </form>
+          <div class="footer">
+            <span data-i18n="footer-contact">联系开发者：</span> <a href="mailto:ooooop2011@gmail.com">ooooop2011@gmail.com</a>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="config.js"></script>
+    <script src="options.js"></script>
+  </body>
+  </html>
