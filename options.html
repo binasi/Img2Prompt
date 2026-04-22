@@ -315,6 +315,13 @@
       button:hover {
         transform: translateY(-1px);
       }
+      button:active {
+        transform: translateY(0) scale(0.98);
+      }
+      button:focus-visible {
+        outline: 2px solid rgba(139, 211, 255, 0.6);
+        outline-offset: 2px;
+      }
       .primary {
         color: #111014;
         background: var(--accent);
@@ -469,16 +476,56 @@
           text-align: left;
         }
       }
+      /* Loading spinner */
+      .loading-spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255,255,255,0.2);
+        border-top-color: var(--text);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      /* History item animations */
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .history-item {
+        animation: fadeInUp 0.3s ease forwards;
+      }
+      .history-item:hover {
+        transform: translateX(2px);
+        transition: all 150ms ease;
+      }
     </style>
   </head>
   <body>
     <main class="shell">
       <section class="panel">
         <div class="inner">
+          <!-- 隐藏的文件输入 -->
+          <input type="file" id="import-file-input" accept=".json" style="display: none;" />
+          
           <header class="header">
-            <h1 class="title" data-i18n="imgprompt-title">ImgPrompt</h1>
+            <div style="display: flex; align-items: baseline; gap: 12px;">
+              <h1 class="title" data-i18n="imgprompt-title">ImgPrompt</h1>
+              <span class="version" id="version-display" style="position: static; font-size: 11px; font-weight: 500; color: var(--muted); opacity: 0.6; letter-spacing: 0.02em;"></span>
+            </div>
             <p class="subtitle" data-i18n="imgprompt-subtitle">Image to Prompt</p>
-            <span class="version" id="version-display"></span>
+            <div style="position: absolute; top: 12px; right: 0; display: flex; gap: 8px; align-items: center;">
+              <button type="button" id="import-settings" class="secondary" style="min-width: auto; padding: 6px 12px; font-size: 11px;">导入</button>
+              <button type="button" id="export-settings" class="secondary" style="min-width: auto; padding: 6px 12px; font-size: 11px;">导出</button>
+            </div>
           </header>
 
           <form id="settings-form">
@@ -509,11 +556,27 @@
                     </label>
                   </div>
                   <div class="grid" style="margin-top: 12px;">
-                    <label>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
                       <span class="label" data-i18n="key-label">API Key</span>
-                      <input id="apiKey" name="apiKey" type="password" required placeholder="sk-..." data-i18n="key-label" />
+                      <button type="button" id="test-connection" class="secondary" style="min-width: auto; padding: 4px 10px; font-size: 10px; white-space: nowrap;">测试连接</button>
+                    </div>
+                    <div style="position: relative;">
+                      <input id="apiKey" name="apiKey" type="password" required placeholder="sk-..." data-i18n="key-label" style="padding-right: 40px;" />
+                      <button type="button" id="toggle-api-key" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px;">
+                        <svg id="eye-icon-show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                          <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <svg id="eye-icon-hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                          <line x1="1" y1="1" x2="23" y2="23"></line>
+                        </svg>
+                      </button>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
                       <span class="hint" data-i18n="key-hint">仅保存在本地浏览器中</span>
-                    </label>
+                      <span id="test-connection-status" style="font-size: 11px; min-height: 16px;"></span>
+                    </div>
                   </div>
                 </div>
               </details>
@@ -659,7 +722,10 @@
                   <div>
                     <h2 class="section-title" data-i18n="historyTitle">历史记录</h2>
                   </div>
-                  <button type="button" id="btn-clear-history" class="secondary" style="min-width: auto; padding: 6px 12px; font-size: 11px; color: #ff6b6b; border-color: rgba(255, 107, 107, 0.3);" data-i18n="historyClear">清空全部</button>
+                  <div style="display: flex; gap: 8px;">
+                    <button type="button" id="btn-export-history" class="secondary" style="min-width: auto; padding: 6px 12px; font-size: 11px;">导出</button>
+                    <button type="button" id="btn-clear-history" class="secondary" style="min-width: auto; padding: 6px 12px; font-size: 11px; color: #ff6b6b; border-color: rgba(255, 107, 107, 0.3);" data-i18n="historyClear">清空全部</button>
+                  </div>
                 </div>
                 <div id="history-list" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
                   <p id="history-empty" style="text-align: center; color: var(--muted); font-size: 13px; padding: 20px 0;" data-i18n="historyEmpty">暂无历史记录</p>
@@ -675,7 +741,7 @@
             </div>
           </form>
           <div class="footer">
-            <span data-i18n="footer-contact">联系开发者：</span> <a href="mailto:ooooop2011@gmail.com">ooooop2011@gmail.com</a>
+            <span data-i18n="footer-contact">感谢大帅锅：</span> <a href="mailto:ooooop2011@gmail.com">只此山青</a>
           </div>
         </div>
       </section>

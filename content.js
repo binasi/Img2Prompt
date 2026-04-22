@@ -1037,7 +1037,7 @@ function buildPanelMarkup() {
         border-radius: 22px;
         background: rgba(255, 255, 255, 0.04);
         color: #f8fafc;
-        padding: 15px 16px;
+        padding: 14px 12px 18px 18px;
         box-sizing: border-box;
         font-size: 13px;
         line-height: 1.6;
@@ -1046,12 +1046,46 @@ function buildPanelMarkup() {
         scrollbar-width: thin;
         scrollbar-color: rgba(148, 163, 184, 0.55) rgba(255, 255, 255, 0.06);
       }
+      .ipi-textarea::-webkit-resizer {
+        background: transparent;
+        border: none;
+      }
+      .ipi-sheet {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        position: relative;
+      }
+      .ipi-textarea-wrapper {
+        position: relative;
+        border-radius: 22px;
+        overflow: hidden;
+      }
+      .ipi-resize-handle {
+        position: absolute;
+        bottom: -24px;
+        right: 10px;
+        width: 18px;
+        height: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(148, 163, 184, 0.35);
+        cursor: ns-resize;
+        pointer-events: auto;
+        transition: color 160ms ease;
+        z-index: 2;
+      }
+      .ipi-resize-handle:hover {
+        color: rgba(148, 163, 184, 0.7);
+      }
       .ipi-textarea::-webkit-scrollbar {
         width: 6px;
       }
       .ipi-textarea::-webkit-scrollbar-track {
         background: rgba(255, 255, 255, 0.04);
         border-radius: 999px;
+        margin: 4px 0;
       }
       .ipi-textarea::-webkit-scrollbar-thumb {
         background: rgba(148, 163, 184, 0.5);
@@ -1107,8 +1141,11 @@ function buildPanelMarkup() {
       .ipi-error {
         color: #f8b4c8;
         font-size: 12px;
-        min-height: 16px;
         padding-left: 2px;
+        display: none;
+      }
+      .ipi-error[data-visible="true"] {
+        display: block;
       }
     </style>
     <section class="ipi-panel" hidden>
@@ -1139,7 +1176,14 @@ function buildPanelMarkup() {
             </div>
             <div class="ipi-error"></div>
             <div class="ipi-sheet" data-visible="false">
-              <textarea class="ipi-textarea" spellcheck="false" placeholder="${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).placeholder}"></textarea>
+              <div class="ipi-textarea-wrapper">
+                <textarea class="ipi-textarea" spellcheck="false" placeholder="${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).placeholder}"></textarea>
+              </div>
+              <div class="ipi-resize-handle" title="拖动调整大小">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 10L10 2M5 10L10 5M8 10L10 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </div>
               <div class="ipi-actions">
                 <div class="ipi-switches">
                   <button class="ipi-switch" type="button" data-lang="zh" data-active="true">${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).zhBtn}</button>
@@ -1292,6 +1336,38 @@ function bindPanelEvents(shadowRoot) {
     startDragging(event);
   });
 
+  // Custom resize handle
+  const resizeHandle = shadowRoot.querySelector(".ipi-resize-handle");
+  const textarea = shadowRoot.querySelector(".ipi-textarea");
+  if (resizeHandle && textarea) {
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    resizeHandle.addEventListener("pointerdown", (event) => {
+      isResizing = true;
+      startY = event.clientY;
+      startHeight = textarea.offsetHeight;
+      textarea.style.userSelect = "none";
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
+    window.addEventListener("pointermove", (event) => {
+      if (!isResizing) return;
+      const deltaY = event.clientY - startY;
+      const newHeight = Math.max(176, startHeight + deltaY);
+      textarea.style.height = newHeight + "px";
+    });
+
+    window.addEventListener("pointerup", () => {
+      if (isResizing) {
+        isResizing = false;
+        textarea.style.userSelect = "";
+      }
+    });
+  }
+
   shadowRoot.querySelectorAll(".ipi-switch").forEach((button) => {
     button.addEventListener("click", () => {
       activeLanguage = button.getAttribute("data-lang") || "zh";
@@ -1429,7 +1505,16 @@ function formatProgressText(text) {
 }
 
 function setError(shadowRoot, text) {
-  shadowRoot.querySelector(".ipi-error").textContent = text;
+  const errorEl = shadowRoot.querySelector(".ipi-error");
+  if (!errorEl) return;
+  
+  if (text) {
+    errorEl.textContent = text;
+    errorEl.setAttribute("data-visible", "true");
+  } else {
+    errorEl.textContent = "";
+    errorEl.removeAttribute("data-visible");
+  }
 }
 
 function setTextareaValue(shadowRoot, value) {

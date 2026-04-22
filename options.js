@@ -205,14 +205,15 @@ async function init() {
   
   loadHistory();
   
-  // Initialize custom dropdown
-  initCustomDropdown();
-  
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.promptHistory) {
+  // Listen for history updates from background
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === "history:updated") {
       loadHistory();
     }
   });
+  
+  // Initialize custom dropdown
+  initCustomDropdown();
 }
 
 async function loadHistory() {
@@ -346,16 +347,13 @@ async function loadHistoryItem(item) {
           imageDataUrl: item.imageDataUrl || ""
         }
       });
+      setStatus("✓ 已在主面板加载历史记录");
+    } else {
+      setStatus("⚠️ 未找到活动标签页");
     }
   } catch (err) {
     console.error("Failed to send history item to content script:", err);
-    // Fallback: copy to clipboard
-    try {
-      await navigator.clipboard.writeText(item.prompts?.zh || item.prompts?.en || "");
-      setStatus(TRANSLATIONS[form.uiLanguage.value]?.historyLoaded || "已复制到剪贴板 ✓");
-    } catch (copyErr) {
-      console.error("Failed to copy:", copyErr);
-    }
+    setStatus("⚠️ 请在网页中打开面板后重试");
   }
 }
 
@@ -366,6 +364,31 @@ document.getElementById("btn-clear-history").addEventListener("click", async () 
   }
 });
 
+// Export history
+document.getElementById("btn-export-history").addEventListener("click", async () => {
+  const response = await chrome.runtime.sendMessage({ type: "history:get" });
+  if (response?.ok && response.history?.length > 0) {
+    const exportData = {
+      version: chrome.runtime.getManifest().version,
+      exportDate: new Date().toISOString(),
+      totalItems: response.history.length,
+      history: response.history
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `imgprompt-history-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    setStatus("✅ 历史记录已导出");
+  } else {
+    setStatus("⚠️ 没有可导出的历史记录");
+  }
+});
+
 form.addEventListener("input", (e) => {
   if (e.target.name === "userPrompt") {
     updateActiveChip(e.target.value.trim());
@@ -373,6 +396,98 @@ form.addEventListener("input", (e) => {
   handleAutoSave();
 });
 form.addEventListener("change", handleAutoSave);
+
+// Export settings
+document.getElementById("export-settings").addEventListener("click", async () => {
+  const settings = await chrome.storage.local.get(Object.keys(DEFAULT_SETTINGS));
+  const exportData = {
+    version: chrome.runtime.getManifest().version,
+    exportDate: new Date().toISOString(),
+    settings
+  };
+  
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `imgprompt-settings-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  setStatus("✅ 设置已导出");
+});
+
+// Import settings
+document.getElementById("import-settings").addEventListener("click", () => {
+  document.getElementById("import-file-input").click();
+});
+
+document.getElementById("import-file-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    
+    if (data.settings) {
+      await chrome.storage.local.set(data.settings);
+      fillForm({ ...DEFAULT_SETTINGS, ...data.settings });
+      setStatus("✅ 设置已导入");
+      
+      chrome.runtime.sendMessage({ type: "settings:updated" }).catch(() => {});
+    } else {
+      setStatus("❌ 导入失败: 文件格式错误");
+    }
+  } catch (err) {
+    setStatus("❌ 导入失败: 文件格式错误");
+  }
+  
+  e.target.value = ''; // Reset input
+});
+
+// Toggle API key visibility
+const toggleApiKeyBtn = document.getElementById("toggle-api-key");
+const apiKeyInput = document.getElementById("apiKey");
+const eyeIconShow = document.getElementById("eye-icon-show");
+const eyeIconHide = document.getElementById("eye-icon-hide");
+
+toggleApiKeyBtn.addEventListener("click", () => {
+  const isPassword = apiKeyInput.type === "password";
+  apiKeyInput.type = isPassword ? "text" : "password";
+  eyeIconShow.style.display = isPassword ? "block" : "none";
+  eyeIconHide.style.display = isPassword ? "none" : "block";
+});
+
+// Test API connection
+document.getElementById("test-connection").addEventListener("click", async () => {
+  const statusEl = document.getElementById("test-connection-status");
+  statusEl.textContent = "⏳ 测试中...";
+  statusEl.style.color = "var(--muted)";
+  
+  const settings = buildPayload();
+  
+  if (!settings.apiEndpoint || !settings.apiKey || !settings.model) {
+    statusEl.textContent = "⚠️ 请先填写完整信息";
+    statusEl.style.color = "#ffc85f";
+    return;
+  }
+  
+  const result = await chrome.runtime.sendMessage({ 
+    type: "api:test-connection", 
+    settings 
+  });
+  
+  if (result?.success) {
+    statusEl.textContent = "✅ " + result.message;
+    statusEl.style.color = "var(--success)";
+  } else {
+    statusEl.textContent = "❌ " + (result?.error || "连接失败");
+    statusEl.style.color = "#ff6b6b";
+  }
+  
+  setTimeout(() => { statusEl.textContent = ""; }, 5000);
+});
 
 resetButton.addEventListener("click", async () => {
   fillForm(DEFAULT_SETTINGS);
@@ -483,10 +598,20 @@ function trackSettingsSaved(source) {
 }
 
 function setStatus(text) {
-  statusEl.textContent = text;
+  statusEl.style.transition = "opacity 200ms ease, transform 200ms ease";
+  statusEl.style.opacity = "0";
+  statusEl.style.transform = "translateY(-5px)";
+  
+  setTimeout(() => {
+    statusEl.textContent = text;
+    statusEl.style.opacity = "1";
+    statusEl.style.transform = "translateY(0)";
+  }, 100);
+  
   window.clearTimeout(setStatus.timerId);
   setStatus.timerId = window.setTimeout(() => {
-    statusEl.textContent = "";
+    statusEl.style.opacity = "0";
+    statusEl.style.transform = "translateY(5px)";
   }, 2400);
 }
 

@@ -12,9 +12,19 @@ const ANALYTICS_CONFIG_KEY = CONFIG.ANALYTICS_CONFIG_KEY;
 
 const MENU_ID = "image-prompt-inspector.generate";
 const CLIENT_ID_KEY = "clientId";
-const HISTORY_KEY = "promptHistory";
 const MAX_HISTORY_ITEMS = 50;
+
+// IndexedDB configuration
+const DB_NAME = 'ImgPromptDB';
+const DB_VERSION = 1;
+const HISTORY_STORE = 'history';
+let dbInstance = null;
 const activeRequests = new Map();
+
+// Initialize IndexedDB when service worker starts
+initIndexedDB().catch(error => {
+  console.error('[ImgPrompt] Failed to initialize IndexedDB on startup:', error);
+});
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   const clientId = await ensureClientId();
@@ -39,6 +49,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
   if (Object.keys(nextValues).length) {
     await chrome.storage.local.set(nextValues);
+  }
+
+  // Initialize IndexedDB for history
+  try {
+    await initIndexedDB();
+  } catch (error) {
+    console.error('[ImgPrompt] Failed to initialize IndexedDB:', error);
   }
 
   const installReason = details?.reason || "unknown";
@@ -167,6 +184,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "api:test-connection") {
+    testApiConnection(message.settings)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type !== "prompt:begin-generation") {
     return false;
   }
@@ -276,6 +300,9 @@ async function processGeneration(message, sender) {
       pageUrl: pageContext.pageUrl || sender.tab?.url || "",
       model: settings.model,
       trigger
+    }).then(() => {
+      // Notify options page to refresh history
+      chrome.runtime.sendMessage({ type: "history:updated" }).catch(() => {});
     });
   } catch (error) {
     if (controller.signal.aborted) {
@@ -411,17 +438,47 @@ async function safeTrackAnalyticsEvent(eventName, properties = {}) {
 
 async function saveToHistory(record) {
   try {
-    const stored = await chrome.storage.local.get(HISTORY_KEY);
-    let history = stored[HISTORY_KEY] || [];
-    history.unshift({
+    console.log('[ImgPrompt] Saving to history:', { prompts: record.prompts?.zh?.substring(0, 50) });
+    const db = await getDB();
+    const tx = db.transaction(HISTORY_STORE, 'readwrite');
+    const store = tx.objectStore(HISTORY_STORE);
+    
+    const item = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
       ...record
+    };
+    
+    await new Promise((resolve, reject) => {
+      const request = store.add(item);
+      request.onsuccess = () => {
+        console.log('[ImgPrompt] History item saved successfully');
+        resolve();
+      };
+      request.onerror = (event) => {
+        console.error('[ImgPrompt] Failed to save history item:', event.target.error);
+        reject(event.target.error);
+      };
     });
-    if (history.length > MAX_HISTORY_ITEMS) {
-      history = history.slice(0, MAX_HISTORY_ITEMS);
+    
+    // Check if we exceed max items and delete oldest if needed
+    const count = await new Promise((resolve, reject) => {
+      const request = store.count();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = reject;
+    });
+    
+    if (count > MAX_HISTORY_ITEMS) {
+      const index = store.index('timestamp');
+      const oldestRequest = index.openCursor();
+      oldestRequest.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor) {
+          cursor.delete();
+        }
+      };
     }
-    await chrome.storage.local.set({ [HISTORY_KEY]: history });
+    
     return true;
   } catch (error) {
     console.error('[ImgPrompt] Failed to save history:', error);
@@ -431,8 +488,30 @@ async function saveToHistory(record) {
 
 async function getHistory() {
   try {
-    const stored = await chrome.storage.local.get(HISTORY_KEY);
-    return stored[HISTORY_KEY] || [];
+    const db = await getDB();
+    const tx = db.transaction(HISTORY_STORE, 'readonly');
+    const store = tx.objectStore(HISTORY_STORE);
+    const index = store.index('timestamp');
+    
+    return new Promise((resolve, reject) => {
+      const request = index.openCursor(null, 'prev');
+      const results = [];
+      
+      request.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor && results.length < MAX_HISTORY_ITEMS) {
+          results.push(cursor.value);
+          cursor.continue();
+        } else {
+          console.log('[ImgPrompt] Retrieved history items:', results.length);
+          resolve(results);
+        }
+      };
+      request.onerror = (event) => {
+        console.error('[ImgPrompt] Failed to retrieve history:', event.target.error);
+        reject(event.target.error);
+      };
+    });
   } catch (error) {
     console.error('[ImgPrompt] Failed to get history:', error);
     return [];
@@ -441,10 +520,16 @@ async function getHistory() {
 
 async function deleteHistoryItem(id) {
   try {
-    const stored = await chrome.storage.local.get(HISTORY_KEY);
-    let history = stored[HISTORY_KEY] || [];
-    history = history.filter(item => item.id !== id);
-    await chrome.storage.local.set({ [HISTORY_KEY]: history });
+    const db = await getDB();
+    const tx = db.transaction(HISTORY_STORE, 'readwrite');
+    const store = tx.objectStore(HISTORY_STORE);
+    
+    await new Promise((resolve, reject) => {
+      const request = store.delete(id);
+      request.onsuccess = resolve;
+      request.onerror = reject;
+    });
+    
     return true;
   } catch (error) {
     console.error('[ImgPrompt] Failed to delete history item:', error);
@@ -454,12 +539,49 @@ async function deleteHistoryItem(id) {
 
 async function clearHistory() {
   try {
-    await chrome.storage.local.set({ [HISTORY_KEY]: [] });
+    const db = await getDB();
+    const tx = db.transaction(HISTORY_STORE, 'readwrite');
+    const store = tx.objectStore(HISTORY_STORE);
+    
+    await new Promise((resolve, reject) => {
+      const request = store.clear();
+      request.onsuccess = resolve;
+      request.onerror = reject;
+    });
+    
     return true;
   } catch (error) {
     console.error('[ImgPrompt] Failed to clear history:', error);
     return false;
   }
+}
+
+// IndexedDB helper functions
+function initIndexedDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      dbInstance = request.result;
+      resolve(dbInstance);
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(HISTORY_STORE)) {
+        const store = db.createObjectStore(HISTORY_STORE, { keyPath: 'id' });
+        store.createIndex('timestamp', 'timestamp', { unique: false });
+      }
+    };
+  });
+}
+
+function getDB() {
+  if (dbInstance) {
+    return Promise.resolve(dbInstance);
+  }
+  return initIndexedDB();
 }
 
 function validateSettings(settings, lang = "zh") {
@@ -941,4 +1063,44 @@ function classifyError(error) {
 function getUserErrorMessage(errorCode, lang = 'zh') {
   const messages = ERROR_MESSAGES[lang] || ERROR_MESSAGES.zh;
   return messages[errorCode] || messages[ERROR_CODES.UNKNOWN];
+}
+
+async function testApiConnection(settings) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const format = resolveRequestFormat(settings);
+    const requestBody = {
+      model: settings.model,
+      max_tokens: 100,
+      messages: [{ role: "user", content: "Hi" }]
+    };
+    
+    const response = await fetch(settings.apiEndpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(format === "anthropic" 
+          ? { "x-api-key": settings.apiKey, "anthropic-version": settings.anthropicVersion || "2023-06-01" }
+          : { Authorization: `Bearer ${settings.apiKey}` })
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      return { success: true, message: "连接成功!" };
+    } else {
+      const errorText = await response.text();
+      return { success: false, error: `HTTP ${response.status}: ${errorText.slice(0, 200)}` };
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      return { success: false, error: "请求超时(10秒)" };
+    }
+    return { success: false, error: error.message };
+  }
 }

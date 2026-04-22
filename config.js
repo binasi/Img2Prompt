@@ -155,7 +155,7 @@ globalThis.ImgPromptConfig = {
       "custom-save-btn": "保存",
       "custom-cancel-btn": "取消",
       "custom-delete-btn": "🗑️ 删除",
-      "footer-contact": "联系开发者："
+      "footer-contact": "感谢大帅锅："
     },
     en: {
       "imgprompt-title": "ImgPrompt",
@@ -199,7 +199,7 @@ globalThis.ImgPromptConfig = {
       "custom-save-btn": "Save",
       "custom-cancel-btn": "Cancel",
       "custom-delete-btn": "🗑️ Delete",
-      "footer-contact": "Contact Developer: "
+      "footer-contact": "XIhaha: "
     }
   },
 
