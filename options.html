@@ -595,6 +595,10 @@
                   <button type="button" class="preset-chip" data-preset="ui" data-i18n="preset-ui">📱 界面 UI</button>
                   <button type="button" class="preset-chip" data-preset="assets3d" data-i18n="preset-3d">🧊 游戏资产</button>
                   <button type="button" class="preset-chip" data-preset="product" data-i18n="preset-product">👕 电商产品</button>
+                  <button type="button" class="preset-chip" data-preset="anime" data-i18n="preset-anime">🎭 动漫插画</button>
+                  <button type="button" class="preset-chip" data-preset="architecture" data-i18n="preset-architecture">🏛️ 建筑室内</button>
+                  <button type="button" class="preset-chip" data-preset="food" data-i18n="preset-food">🍜 美食摄影</button>
+                  <button type="button" class="preset-chip" data-preset="portrait" data-i18n="preset-portrait">👤 人像摄影</button>
                   <button type="button" id="btn-add-custom" class="preset-chip" style="border-style: dashed;" data-preset="+add" data-i18n="preset-add-custom">➕ 添加自定义</button>
                 </div>
 
@@ -684,6 +688,18 @@
                   </label>
                 </div>
                 <p class="section-note" data-i18n="shortcut-hint" style="margin-top: 8px; font-size: 11px; opacity: 0.8;">默认快捷键：Alt / Option + S 。如需修改，请前往 chrome://extensions/shortcuts</p>
+
+                <div class="toggle-row" style="margin-top: 14px; border-top: 1px solid var(--line-soft); padding-top: 14px;">
+                  <div class="toggle-copy">
+                    <div class="toggle-title" data-i18n="toggle-recreate-title">高还原度模式</div>
+                    <div class="toggle-note" data-i18n="toggle-recreate-note">启用后将使用更详细的分析提示词,生成更精确的还原提示词(包含负面提示词和技术参数)。</div>
+                  </div>
+                  <label class="switch" aria-label="切换高还原度模式">
+                    <input id="recreateMode" name="recreateMode" type="checkbox" />
+                    <span class="switch-track"></span>
+                    <span class="switch-thumb"></span>
+                  </label>
+                </div>
 
               </section>
 
