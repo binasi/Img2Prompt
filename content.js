@@ -52,6 +52,7 @@ let generationStartedAt = 0;
 let progressTimerId = 0;
 let currentProgressText = "";
 let panelDismissed = false;
+let isJsonMode = false;
 
 function isExtensionContextError(error) {
   const message = error instanceof Error ? error.message : String(error || "");
@@ -351,9 +352,14 @@ function handleResult(message) {
     return;
   }
 
+  // Parse full structured prompt data including negative prompts and parameters
+  const prompts = message.prompts || {};
   currentPrompts = {
-    zh: message.prompts?.zh || "",
-    en: message.prompts?.en || ""
+    zh: prompts.zh || "",
+    en: prompts.en || "",
+    negative_zh: prompts.negative_zh || "",
+    negative_en: prompts.negative_en || "",
+    parameters: prompts.parameters || null
   };
   currentSource = message.source || currentSource;
 
@@ -382,9 +388,13 @@ function handleLoadHistoryItem(message) {
   }
 
   panelDismissed = false;
+  const prompts = historyData.prompts || {};
   currentPrompts = {
-    zh: historyData.prompts?.zh || "",
-    en: historyData.prompts?.en || ""
+    zh: prompts.zh || "",
+    en: prompts.en || "",
+    negative_zh: prompts.negative_zh || "",
+    negative_en: prompts.negative_en || "",
+    parameters: prompts.parameters || null
   };
   currentSource = {
     srcUrl: historyData.srcUrl || "",
@@ -1122,6 +1132,18 @@ function buildPanelMarkup() {
         background: rgba(255, 255, 255, 0.96);
         color: #0f0f14;
       }
+      .ipi-json-toggle {
+        background: rgba(139, 211, 255, 0.1);
+        border-color: rgba(139, 211, 255, 0.3);
+        color: #8bd3ff;
+        font-size: 10px;
+        padding: 9px 10px;
+      }
+      .ipi-json-toggle.active {
+        background: rgba(139, 211, 255, 0.25);
+        border-color: rgba(139, 211, 255, 0.6);
+        color: #fff;
+      }
       .ipi-actions {
         align-items: center;
         justify-content: space-between;
@@ -1188,6 +1210,7 @@ function buildPanelMarkup() {
                 <div class="ipi-switches">
                   <button class="ipi-switch" type="button" data-lang="zh" data-active="true">${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).zhBtn}</button>
                   <button class="ipi-switch" type="button" data-lang="en" data-active="false">${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).enBtn}</button>
+                  <button class="ipi-switch ipi-json-toggle" type="button" data-action="toggle-json" title="JSON模式">JSON</button>
                 </div>
                 <button class="ipi-action" type="button" data-action="copy" data-state="idle">${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).copyBtn}</button>
               </div>
@@ -1370,13 +1393,23 @@ function bindPanelEvents(shadowRoot) {
 
   shadowRoot.querySelectorAll(".ipi-switch").forEach((button) => {
     button.addEventListener("click", () => {
+      // Skip JSON toggle button
+      if (button.getAttribute("data-action") === "toggle-json") {
+        return;
+      }
+      
       activeLanguage = button.getAttribute("data-lang") || "zh";
       
       preferredPromptLanguage = activeLanguage;
       chrome.storage.local.set({ preferredPromptLanguage: activeLanguage });
 
       syncLanguageButtons(shadowRoot);
-      setTextareaValue(shadowRoot, currentPrompts[activeLanguage] || "");
+      
+      // In JSON mode, keep showing JSON regardless of language switch
+      if (!isJsonMode) {
+        setTextareaValue(shadowRoot, currentPrompts[activeLanguage] || "");
+      }
+      
       trackEvent("prompt_language_switched", {
         language: activeLanguage,
         trigger: currentTrigger,
@@ -1392,7 +1425,18 @@ function bindPanelEvents(shadowRoot) {
   });
 
   shadowRoot.querySelector('[data-action="copy"]')?.addEventListener("click", async () => {
-    const text = currentPrompts[activeLanguage] || "";
+    let text;
+    if (isJsonMode && currentPrompts) {
+      const jsonData = {};
+      if (currentPrompts.zh) jsonData.zh = currentPrompts.zh;
+      if (currentPrompts.en) jsonData.en = currentPrompts.en;
+      if (currentPrompts.negative_zh) jsonData.negative_zh = currentPrompts.negative_zh;
+      if (currentPrompts.negative_en) jsonData.negative_en = currentPrompts.negative_en;
+      if (currentPrompts.parameters) jsonData.parameters = currentPrompts.parameters;
+      text = JSON.stringify(jsonData, null, 2);
+    } else {
+      text = currentPrompts[activeLanguage] || "";
+    }
     if (!text) {
       return;
     }
@@ -1410,6 +1454,29 @@ function bindPanelEvents(shadowRoot) {
       const dict = UI_STRINGS[uiLanguage] || UI_STRINGS.zh;
       setCopyButtonState(shadowRoot, "idle");
       setError(shadowRoot, dict.copyFailed);
+    }
+  });
+
+  shadowRoot.querySelector('[data-action="toggle-json"]')?.addEventListener("click", () => {
+    isJsonMode = !isJsonMode;
+    const jsonBtn = shadowRoot.querySelector('[data-action="toggle-json"]');
+    if (jsonBtn) {
+      jsonBtn.classList.toggle("active", isJsonMode);
+    }
+    // Refresh textarea display
+    if (isJsonMode && currentPrompts) {
+      const jsonData = {};
+      if (currentPrompts.zh) jsonData.zh = currentPrompts.zh;
+      if (currentPrompts.en) jsonData.en = currentPrompts.en;
+      if (currentPrompts.negative_zh) jsonData.negative_zh = currentPrompts.negative_zh;
+      if (currentPrompts.negative_en) jsonData.negative_en = currentPrompts.negative_en;
+      if (currentPrompts.parameters) jsonData.parameters = currentPrompts.parameters;
+      
+      if (Object.keys(jsonData).length > 0) {
+        setTextareaValue(shadowRoot, JSON.stringify(jsonData, null, 2));
+      }
+    } else {
+      setTextareaValue(shadowRoot, currentPrompts[activeLanguage] || "");
     }
   });
 
@@ -1518,7 +1585,25 @@ function setError(shadowRoot, text) {
 }
 
 function setTextareaValue(shadowRoot, value) {
-  shadowRoot.querySelector(".ipi-textarea").value = value;
+  const textarea = shadowRoot.querySelector(".ipi-textarea");
+  if (!textarea) return;
+  
+  if (isJsonMode && currentPrompts) {
+    // Build complete JSON with all available fields
+    const jsonData = {};
+    if (currentPrompts.zh) jsonData.zh = currentPrompts.zh;
+    if (currentPrompts.en) jsonData.en = currentPrompts.en;
+    if (currentPrompts.negative_zh) jsonData.negative_zh = currentPrompts.negative_zh;
+    if (currentPrompts.negative_en) jsonData.negative_en = currentPrompts.negative_en;
+    if (currentPrompts.parameters) jsonData.parameters = currentPrompts.parameters;
+    
+    if (Object.keys(jsonData).length > 0) {
+      textarea.value = JSON.stringify(jsonData, null, 2);
+      return;
+    }
+  }
+  
+  textarea.value = value || "";
 }
 
 function setPreview(shadowRoot, src) {

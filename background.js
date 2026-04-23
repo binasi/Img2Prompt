@@ -865,6 +865,9 @@ function normalizePromptResult(rawResult, lang = "zh") {
 
   const zh = String(parsed?.zh || "").trim();
   const en = String(parsed?.en || "").trim();
+  const negative_zh = String(parsed?.negative_zh || "").trim();
+  const negative_en = String(parsed?.negative_en || "").trim();
+  const parameters = parsed?.parameters || null;
 
   if (!zh && !en) {
     throw new Error(dict.missingFields);
@@ -872,7 +875,10 @@ function normalizePromptResult(rawResult, lang = "zh") {
 
   return {
     zh: zh || en,
-    en: en || zh
+    en: en || zh,
+    negative_zh: negative_zh,
+    negative_en: negative_en,
+    parameters: parameters
   };
 }
 

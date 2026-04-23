@@ -12,13 +12,10 @@
 
 ## 更新摘要
 **变更内容**
-- 完全重构为服务工作者架构，使用 Manifest V3
-- 新增 IndexedDB 历史存储系统，替代传统存储方案
-- 集成 PostHog 分析平台，增强用户行为追踪
-- 优化消息通信机制，支持更丰富的事件类型
-- 增强错误分类与用户提示系统
-- 改进图片处理与压缩算法
-- 新增多格式 API 支持（OpenAI 兼容与 Anthropic Claude）
+- 新增 buildUserPrompt 函数实现智能提示词堆叠逻辑，替代简单的字符串拼接方法
+- buildUserPrompt 函数支持基础提示词与场景预设的智能组合
+- 增强了提示词构建的灵活性和准确性
+- 优化了用户自定义提示词的处理机制
 
 ## 目录
 1. [简介](#简介)
@@ -42,6 +39,7 @@
 - 异步请求管理、超时控制与错误分类处理
 - IndexedDB 历史存储系统与 PostHog 分析集成
 - 性能优化建议与最佳实践
+- **新增** 智能提示词堆叠逻辑（buildUserPrompt 函数）
 
 ## 项目结构
 该扩展采用 Manifest V3 服务工作者架构，核心文件如下：
@@ -60,6 +58,12 @@ CFG["config.js<br/>共享配置"]
 OPT["options.js / options.html<br/>设置与历史"]
 IDB["IndexedDB<br/>历史存储"]
 PH["PostHog<br/>分析平台"]
+ENDPOINT["API 端点<br/>OpenAI/Anthropic"]
+ENDPOINT --> SW
+ENDPOINT --> CS
+ENDPOINT --> OPT
+ENDPOINT --> IDB
+ENDPOINT --> PH
 end
 subgraph "浏览器API"
 RT["chrome.runtime"]
@@ -113,6 +117,8 @@ CFG --> OPT
   - 将底层错误映射为统一错误码，结合 UI 文案输出用户友好信息
 - IndexedDB 历史记录与分析事件
   - IndexedDB 存储历史记录，支持查询、删除、清空；通过 PostHog 上报分析事件
+- **新增** 智能提示词堆叠逻辑
+  - buildUserPrompt 函数实现基础提示词与场景预设的智能组合，支持用户自定义场景
 
 **章节来源**
 - [background.js:19-57](file://background.js#L19-L57)
@@ -124,6 +130,7 @@ CFG --> OPT
 - [background.js:775-849](file://background.js#L775-L849)
 - [background.js:872-945](file://background.js#L872-L945)
 - [background.js:412-463](file://background.js#L412-L463)
+- [background.js:639-666](file://background.js#L639-L666)
 
 ## 架构总览
 后台服务作为服务工作者，承担以下职责：
@@ -132,6 +139,7 @@ CFG --> OPT
 - 数据处理：图片获取与压缩、请求格式判定、模型调用、结果规范化
 - 通信协调：向内容脚本推送进度与结果，接收取消与设置更新
 - 存储与分析：IndexedDB 历史记录管理、PostHog 分析事件上报
+- **新增** 提示词构建：智能堆叠基础提示词与场景预设，优化 AI 生成质量
 
 ```mermaid
 sequenceDiagram
@@ -146,6 +154,7 @@ BG->>CS : 发送 "prompt : start-analysis" 或 "prompt : start-snipping"
 CS-->>BG : 用户确认后发起 "prompt : begin-generation"
 BG->>BG : 生成 requestId / 创建 AbortController
 BG->>BG : fetchAndCompressImage()
+BG->>BG : buildUserPrompt() 智能堆叠提示词
 BG->>AI : requestPromptFromModel()
 AI-->>BG : 返回原始文本
 BG->>BG : normalizePromptResult()
@@ -250,6 +259,47 @@ ThrowACError --> End
 - [background.js:517-592](file://background.js#L517-L592)
 - [background.js:594-666](file://background.js#L594-L666)
 - [background.js:728-753](file://background.js#L728-L753)
+
+### 智能提示词堆叠逻辑（buildUserPrompt 函数）
+- **新增** 智能堆叠机制
+  - 基于 ImgPromptConfig.BASE_USER_PROMPT 和 ImgPromptConfig.USER_PROMPT_PRESETS 实现
+  - 支持基础提示词与场景预设的智能组合
+  - 自动检测用户选择的特定场景预设，避免重复添加通用场景
+- 构建流程
+  - 从配置中获取基础提示词和预设集合
+  - 检查用户提示词是否匹配特定场景预设（排除 general 场景）
+  - 构建最终提示词：基础提示词 + 场景焦点（如有） + 页面上下文
+  - 使用空行分隔各部分，确保格式清晰
+- 与 UI 面板的协同
+  - options.js 中也实现了类似的智能堆叠逻辑，确保前后端一致性
+  - 支持用户自定义场景模板的智能识别与激活
+
+```mermaid
+flowchart TD
+Start(["buildUserPrompt(userPrompt, pageHints)"]) --> GetBase["获取基础提示词 BASE_USER_PROMPT"]
+GetBase --> GetPresets["获取场景预设 USER_PROMPT_PRESETS"]
+GetPresets --> CheckPreset{"检查是否匹配特定场景预设?"}
+CheckPreset --> |是| ExtractScene["提取场景焦点文本"]
+CheckPreset --> |否| NoScene["场景焦点为空"]
+ExtractScene --> BuildParts["构建提示词部件数组"]
+NoScene --> BuildParts
+BuildParts --> AddPageHints{"是否有页面上下文?"}
+AddPageHints --> |是| AddHints["添加页面提示词"]
+AddPageHints --> |否| SkipHints["跳过页面提示词"]
+AddHints --> JoinParts["连接各部件空行分隔"]
+SkipHints --> JoinParts
+JoinParts --> FilterEmpty["过滤空部件"]
+FilterEmpty --> Return(["返回最终提示词"])
+```
+
+**图表来源**
+- [background.js:639-666](file://background.js#L639-L666)
+- [options.js:42-56](file://options.js#L42-L56)
+
+**章节来源**
+- [background.js:639-666](file://background.js#L639-L666)
+- [config.js:5-38](file://config.js#L5-L38)
+- [options.js:42-56](file://options.js#L42-L56)
 
 ### 图片处理与压缩逻辑（Base64、尺寸调整、格式转换）
 - 输入来源
@@ -356,6 +406,9 @@ Compress["createImageBitmap -> OffscreenCanvas -> convertToBlob(JPEG) -> dataURL
 - fetchAndCompressImage
   - 作用：统一获取与压缩图片，返回 dataURL
   - 示例路径：[fetchAndCompressImage:897-929](file://background.js#L897-L929)
+- **新增** buildUserPrompt
+  - 作用：实现智能提示词堆叠逻辑，替代简单字符串拼接
+  - 示例路径：[buildUserPrompt:639-666](file://background.js#L639-L666)
 
 **章节来源**
 - [background.js:236-347](file://background.js#L236-L347)
@@ -363,15 +416,18 @@ Compress["createImageBitmap -> OffscreenCanvas -> convertToBlob(JPEG) -> dataURL
 - [background.js:639-714](file://background.js#L639-L714)
 - [background.js:716-788](file://background.js#L716-L788)
 - [background.js:897-929](file://background.js#L897-L929)
+- [background.js:639-666](file://background.js#L639-L666)
 
 ## 依赖关系分析
 - 配置依赖
   - config.js 提供默认设置、UI 文案、错误码、分析上报配置，被 background.js、content.js、options.js 共享
+  - **新增** config.js 中的 BASE_USER_PROMPT 和 USER_PROMPT_PRESETS 为 buildUserPrompt 提供基础配置
 - 权限与 API
   - manifest.json 声明 contextMenus、storage、sidePanel、activeTab 权限，支持右键菜单、本地存储、侧边栏与活动标签页操作
 - 模块耦合
   - background.js 与 content.js 通过消息通道强耦合，但职责清晰：前者负责后台逻辑与模型调用，后者负责 UI 与用户交互
   - options.js 与 options.html 通过 chrome.storage 与 runtime 通信，负责设置持久化与历史记录展示
+  - **新增** options.js 与 background.js 在提示词构建逻辑上保持一致性
 
 ```mermaid
 graph LR
@@ -389,6 +445,10 @@ CS --> TAB
 OPT["options.js"] --> ST
 OPT --> RT
 OPT --> CS
+OPT --> CFG
+CFG --> BG
+CFG --> CS
+CFG --> OPT
 ```
 
 **图表来源**
@@ -417,6 +477,9 @@ OPT --> CS
 - IndexedDB 优化
   - 使用事务批量操作，避免重复查询
   - 自动清理超出限制的历史记录，保持数据库大小可控
+- **新增** 智能提示词堆叠
+  - buildUserPrompt 函数避免了重复的基础提示词，减少了请求体大小
+  - 支持场景预设的智能识别，提高 AI 生成的针对性和准确性
 
 ## 故障排查指南
 - 常见错误与定位
@@ -430,6 +493,7 @@ OPT --> CS
   - 缺失字段：确保返回包含 zh/en 字段
   - IndexedDB 错误：检查浏览器存储权限与数据库版本兼容性
   - PostHog 集成失败：验证项目密钥与主机配置
+  - **新增** 提示词构建错误：检查 BASE_USER_PROMPT 和 USER_PROMPT_PRESETS 配置是否正确
 - 用户提示映射
   - 使用错误码映射到 UI 文案，便于快速定位问题类别
 - 取消与重试
@@ -440,7 +504,11 @@ OPT --> CS
 - [config.js:206-247](file://config.js#L206-L247)
 
 ## 结论
-background.js 以清晰的服务工作者架构与职责分离实现了完整的图片提示词生成链路：从扩展初始化、右键菜单与快捷键触发，到图片获取与压缩、AI 模型调用、结果归一化与 UI 推送，再到 IndexedDB 历史记录与 PostHog 分析事件上报。其错误分类与用户提示机制提升了用户体验，而统一的图片处理与请求管理保障了稳定性与性能。新增的 IndexedDB 存储系统提供了可靠的本地数据持久化，PostHog 集成增强了产品分析能力。建议在生产环境中持续监控分析事件与错误分布，动态调整 maxImageEdge 与模型参数，以获得更优的吞吐与成功率。
+background.js 以清晰的服务工作者架构与职责分离实现了完整的图片提示词生成链路：从扩展初始化、右键菜单与快捷键触发，到图片获取与压缩、AI 模型调用、结果归一化与 UI 推送，再到 IndexedDB 历史记录与 PostHog 分析事件上报。其错误分类与用户提示机制提升了用户体验，而统一的图片处理与请求管理保障了稳定性与性能。
+
+**最新更新** 新增的 buildUserPrompt 函数实现了智能提示词堆叠逻辑，替代了简单的字符串拼接方法。该函数基于配置系统实现了基础提示词与场景预设的智能组合，支持用户自定义场景模板的识别与激活，显著提升了 AI 生成提示词的质量和针对性。同时，options.js 中也实现了相同的智能堆叠逻辑，确保前后端的一致性。
+
+新增的 IndexedDB 存储系统提供了可靠的本地数据持久化，PostHog 集成增强了产品分析能力。建议在生产环境中持续监控分析事件与错误分布，动态调整 maxImageEdge 与模型参数，以获得更优的吞吐与成功率。
 
 ## 附录
 - 设置面板与历史记录
@@ -448,8 +516,12 @@ background.js 以清晰的服务工作者架构与职责分离实现了完整的
   - options.html 提供 UI 布局与样式，支持多语言切换
 - 侧边栏与悬浮按钮
   - background.js 通过 sidePanel API 控制侧边栏行为；content.js 实现悬浮按钮与主面板 UI
+- **新增** 提示词配置
+  - config.js 中的 BASE_USER_PROMPT 提供基础提示词模板
+  - USER_PROMPT_PRESETS 提供多种场景预设，支持智能堆叠逻辑
 
 **章节来源**
 - [options.js:182-551](file://options.js#L182-L551)
 - [options.html:1-687](file://options.html#L1-687)
 - [content.js:102-163](file://content.js#L102-L163)
+- [config.js:5-38](file://config.js#L5-L38)
