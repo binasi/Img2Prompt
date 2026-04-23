@@ -358,7 +358,9 @@ function buildHistoryJsonPreview(prompts) {
     "text_content",
     "style",
     "lighting",
-    "color_palette"
+    "color_palette",
+    "negative",
+    "parameters"
   ];
 
   keys.forEach((key) => {
@@ -673,6 +675,7 @@ function buildPayload() {
     anthropicVersion: DEFAULT_SETTINGS.anthropicVersion,
     hoverButtonEnabled: form.hoverButtonEnabled.checked,
     snippingShortcutEnabled: form.snippingShortcutEnabled.checked,
+    recreateMode: form.recreateMode.checked,
     uiLanguage: form.uiLanguage.value,
     maxImageEdge: parseInt(form.maxImageEdge.value, 10) || 1024,
     systemPrompt: DEFAULT_SETTINGS.systemPrompt,
@@ -777,6 +780,7 @@ function fillForm(settings) {
   
   form.hoverButtonEnabled.checked = settings.hoverButtonEnabled !== false;
   form.snippingShortcutEnabled.checked = settings.snippingShortcutEnabled !== false;
+  form.recreateMode.checked = settings.recreateMode === true;
   form.uiLanguage.value = settings.uiLanguage || "zh";
   form.maxImageEdge.value = settings.maxImageEdge || 1024;
 }

@@ -15,6 +15,8 @@
 - 增强 normalizePromptResult 函数，新增对 negative_zh、negative_en 和 parameters 字段的支持
 - 实现完整的结构化提示数据处理，支持多语言正面提示词、负面提示词和参数对象
 - 优化提示词数据的标准化和归一化流程
+- 新增智能堆叠逻辑，支持场景预设的自动识别和组合
+- 增强英文提示词生成支持，通过 ENGLISH_PROMPT_REQUIREMENT 配置
 
 ## 目录
 1. [简介](#简介)
@@ -39,6 +41,8 @@
 - IndexedDB 历史存储系统与 PostHog 分析集成
 - 性能优化建议与最佳实践
 - **新增** 增强的结构化提示数据处理（normalizePromptResult 函数）
+- **新增** 智能堆叠逻辑（buildUserPrompt 函数）
+- **新增** 英文提示词生成支持
 
 ## 项目结构
 该扩展采用 Manifest V3 服务工作者架构，核心文件如下：
@@ -118,6 +122,10 @@ CFG --> OPT
   - IndexedDB 存储历史记录，支持查询、删除、清空；通过 PostHog 上报分析事件
 - **新增** 增强的结构化提示数据处理
   - normalizePromptResult 函数支持完整的结构化提示数据，包括 zh/en 正面提示词、negative_zh/negative_en 负面提示词、parameters 参数对象
+- **新增** 智能堆叠逻辑
+  - buildUserPrompt 函数实现智能提示词堆叠，支持场景预设的自动识别和组合
+- **新增** 英文提示词生成支持
+  - 通过 ENGLISH_PROMPT_REQUIREMENT 配置确保英文提示词字段的生成
 
 **章节来源**
 - [background.js:19-57](file://background.js#L19-L57)
@@ -130,6 +138,7 @@ CFG --> OPT
 - [background.js:872-945](file://background.js#L872-L945)
 - [background.js:412-463](file://background.js#L412-L463)
 - [background.js:639-666](file://background.js#L639-L666)
+- [background.js:846-883](file://background.js#L846-L883)
 
 ## 架构总览
 后台服务作为服务工作者，承担以下职责：
@@ -139,6 +148,8 @@ CFG --> OPT
 - 通信协调：向内容脚本推送进度与结果，接收取消与设置更新
 - 存储与分析：IndexedDB 历史记录管理、PostHog 分析事件上报
 - **新增** 结构化提示数据处理：增强 normalizePromptResult 函数，支持完整的结构化提示数据格式
+- **新增** 智能堆叠逻辑：buildUserPrompt 函数实现智能提示词组合，提升生成质量
+- **新增** 英文提示词支持：通过 ENGLISH_PROMPT_REQUIREMENT 确保英文提示词生成
 
 ```mermaid
 sequenceDiagram
@@ -309,10 +320,11 @@ BuildResult --> Return(["返回标准化提示词对象"])
   - 基于 ImgPromptConfig.BASE_USER_PROMPT 和 ImgPromptConfig.USER_PROMPT_PRESETS 实现
   - 支持基础提示词与场景预设的智能组合
   - 自动检测用户选择的特定场景预设，避免重复添加通用场景
+  - 新增 ENGLISH_PROMPT_REQUIREMENT 支持英文提示词生成
 - 构建流程
   - 从配置中获取基础提示词和预设集合
   - 检查用户提示词是否匹配特定场景预设（排除 general 场景）
-  - 构建最终提示词：基础提示词 + 场景焦点（如有） + 页面上下文
+  - 构建最终提示词：基础提示词 + 场景焦点（如有） + 页面上下文 + 通用约束 + 重建模式叠加 + 英文提示词要求
   - 使用空行分隔各部分，确保格式清晰
 - 与 UI 面板的协同
   - options.js 中也实现了类似的智能堆叠逻辑，确保前后端一致性
@@ -330,8 +342,13 @@ NoScene --> BuildParts
 BuildParts --> AddPageHints{"是否有页面上下文?"}
 AddPageHints --> |是| AddHints["添加页面提示词"]
 AddPageHints --> |否| SkipHints["跳过页面提示词"]
-AddHints --> JoinParts["连接各部件空行分隔"]
-SkipHints --> JoinParts
+AddHints --> AddGeneric["添加通用用户约束"]
+SkipHints --> AddGeneric
+AddGeneric --> AddRecreate{"是否启用重建模式?"}
+AddRecreate --> |是| AddRecreateOverlay["添加重建模式叠加"]
+AddRecreate --> |否| AddEnglishReq["添加英文提示词要求"]
+AddRecreateOverlay --> AddEnglishReq
+AddEnglishReq --> JoinParts["连接各部件空行分隔"]
 JoinParts --> FilterEmpty["过滤空部件"]
 FilterEmpty --> Return(["返回最终提示词"])
 ```
@@ -470,6 +487,7 @@ Compress["createImageBitmap -> OffscreenCanvas -> convertToBlob(JPEG) -> dataURL
 - 配置依赖
   - config.js 提供默认设置、UI 文案、错误码、分析上报配置，被 background.js、content.js、options.js 共享
   - **新增** config.js 中的 BASE_USER_PROMPT 和 USER_PROMPT_PRESETS 为 buildUserPrompt 提供基础配置
+  - **新增** config.js 中的 ENGLISH_PROMPT_REQUIREMENT 为英文提示词生成提供支持
   - **新增** config.js 中的系统提示词模板包含完整的结构化提示数据格式定义
 - 权限与 API
   - manifest.json 声明 contextMenus、storage、sidePanel、activeTab 权限，支持右键菜单、本地存储、侧边栏与活动标签页操作
@@ -534,6 +552,10 @@ CFG --> OPT
 - **新增** 智能提示词堆叠
   - buildUserPrompt 函数避免了重复的基础提示词，减少了请求体大小
   - 支持场景预设的智能识别，提高 AI 生成的针对性和准确性
+  - ENGLISH_PROMPT_REQUIREMENT 确保英文提示词的生成，提升多语言支持
+- **新增** 英文提示词支持
+  - 通过 ENGLISH_PROMPT_REQUIREMENT 配置确保英文提示词字段的生成
+  - 支持多语言界面的提示词显示和编辑
 
 ## 故障排查指南
 - 常见错误与定位
@@ -546,9 +568,10 @@ CFG --> OPT
   - JSON 解析失败：调整 system prompt，确保输出纯 JSON
   - 缺失字段：确保返回包含 zh/en 字段
   - **新增** 结构化数据处理错误：检查 JSON 格式是否符合规范，确认包含必要的字段
+  - **新增** 智能堆叠逻辑错误：检查 USER_PROMPT_PRESETS 配置是否正确
+  - **新增** 英文提示词生成错误：确认 ENGLISH_PROMPT_REQUIREMENT 配置生效
   - IndexedDB 错误：检查浏览器存储权限与数据库版本兼容性
   - PostHog 集成失败：验证项目密钥与主机配置
-  - **新增** 提示词构建错误：检查 BASE_USER_PROMPT 和 USER_PROMPT_PRESETS 配置是否正确
 - 用户提示映射
   - 使用错误码映射到 UI 文案，便于快速定位问题类别
 - 取消与重试
@@ -563,7 +586,9 @@ background.js 以清晰的服务工作者架构与职责分离实现了完整的
 
 **最新更新** 增强的 normalizePromptResult 函数实现了完整的结构化提示数据处理，支持 zh/en 正面提示词、negative_zh/negative_en 负面提示词和 parameters 参数对象的标准化处理。该函数提供了智能 JSON 解析、数据清洗和字段验证功能，显著提升了提示词数据的完整性和可用性。同时，content.js 中也实现了相同的结构化数据处理逻辑，确保前后端的一致性和数据完整性。
 
-新增的 IndexedDB 存储系统提供了可靠的本地数据持久化，PostHog 集成增强了产品分析能力。建议在生产环境中持续监控分析事件与错误分布，动态调整 maxImageEdge 与模型参数，以获得更优的吞吐与成功率。
+新增的智能堆叠逻辑（buildUserPrompt 函数）实现了场景预设的自动识别和组合，通过 ENGLISH_PROMPT_REQUIREMENT 配置确保英文提示词的生成，显著提升了生成质量和多语言支持。这些改进使得扩展能够更好地适应不同的使用场景和用户需求。
+
+建议在生产环境中持续监控分析事件与错误分布，动态调整 maxImageEdge 与模型参数，以获得更优的吞吐与成功率。
 
 ## 附录
 - 设置面板与历史记录
@@ -577,6 +602,10 @@ background.js 以清晰的服务工作者架构与职责分离实现了完整的
 - **新增** 提示词配置
   - config.js 中的 BASE_USER_PROMPT 提供基础提示词模板
   - USER_PROMPT_PRESETS 提供多种场景预设，支持智能堆叠逻辑
+  - ENGLISH_PROMPT_REQUIREMENT 确保英文提示词的生成
+- **新增** 智能堆叠逻辑实现
+  - background.js 中的 buildUserPrompt 函数实现智能提示词组合
+  - options.js 中的智能堆叠逻辑确保前后端一致性
 
 **章节来源**
 - [options.js:182-551](file://options.js#L182-L551)
@@ -584,3 +613,4 @@ background.js 以清晰的服务工作者架构与职责分离实现了完整的
 - [content.js:102-163](file://content.js#L102-L163)
 - [config.js:5-38](file://config.js#L5-L38)
 - [config.js:19-24](file://config.js#L19-L24)
+- [config.js:8-10](file://config.js#L8-L10)

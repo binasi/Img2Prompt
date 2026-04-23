@@ -636,9 +636,23 @@ function resolveRequestFormat(settings) {
   return "openai";
 }
 
+function buildSystemPrompt(settings = {}) {
+  const baseSystemPrompt = ImgPromptConfig.DEFAULT_SETTINGS.systemPrompt;
+  const recreateModeSystemOverlay = ImgPromptConfig.RECREATE_MODE_SYSTEM_OVERLAY;
+  const parts = [baseSystemPrompt];
+
+  if (settings.recreateMode && recreateModeSystemOverlay) {
+    parts.push(recreateModeSystemOverlay);
+  }
+
+  return parts.filter(Boolean).join("\n\n");
+}
+
 // Build user prompt with smart stacking logic
-function buildUserPrompt(userPrompt, pageHints) {
+function buildUserPrompt(userPrompt, pageHints, settings = {}) {
   const basePrompt = ImgPromptConfig.BASE_USER_PROMPT;
+  const genericUserConstraints = ImgPromptConfig.GENERIC_USER_CONSTRAINTS;
+  const recreateModeUserOverlay = ImgPromptConfig.RECREATE_MODE_USER_OVERLAY;
   const englishPromptRequirement = ImgPromptConfig.ENGLISH_PROMPT_REQUIREMENT;
   const presets = ImgPromptConfig.USER_PROMPT_PRESETS;
   
@@ -662,6 +676,12 @@ function buildUserPrompt(userPrompt, pageHints) {
   if (pageHints) {
     parts.push(pageHints);
   }
+  if (genericUserConstraints) {
+    parts.push(genericUserConstraints);
+  }
+  if (settings.recreateMode && recreateModeUserOverlay) {
+    parts.push(recreateModeUserOverlay);
+  }
   if (englishPromptRequirement) {
     parts.push(englishPromptRequirement);
   }
@@ -684,14 +704,14 @@ async function requestViaOpenAICompatible({ settings, imageInput, pageHints, sig
     messages: [
       {
         role: "system",
-        content: ImgPromptConfig.DEFAULT_SETTINGS.systemPrompt
+        content: buildSystemPrompt(settings)
       },
       {
         role: "user",
         content: [
           {
             type: "text",
-            text: buildUserPrompt(settings.userPrompt, pageHints)
+            text: buildUserPrompt(settings.userPrompt, pageHints, settings)
           },
           {
             type: "image_url",
@@ -766,8 +786,8 @@ async function requestViaAnthropic({ settings, imageInput, pageHints, signal }) 
     },
     body: JSON.stringify({
       model: settings.model,
-      system: ImgPromptConfig.DEFAULT_SETTINGS.systemPrompt,
-      max_tokens: 1400,
+      system: buildSystemPrompt(settings),
+      max_tokens: settings.recreateMode ? 2600 : 1400,
       temperature: Number(settings.temperature) || 1,
       messages: [
         {
@@ -775,7 +795,7 @@ async function requestViaAnthropic({ settings, imageInput, pageHints, signal }) 
           content: [
             {
               type: "text",
-              text: buildUserPrompt(settings.userPrompt, pageHints)
+              text: buildUserPrompt(settings.userPrompt, pageHints, settings)
             },
             {
               type: "image",

@@ -58,7 +58,11 @@ let isJsonMode = false;
 function buildReadableText(prompts) {
   if (!prompts) return "";
   if (activeLanguage === "en" && typeof prompts.en === "string" && prompts.en.trim()) {
-    return prompts.en.trim();
+    const enParts = [prompts.en.trim()];
+    if (prompts.negative) {
+      enParts.push(`Negative: ${String(prompts.negative).trim()}`);
+    }
+    return enParts.join("\n\n");
   }
   if (activeLanguage === "zh" && typeof prompts.zh === "string" && prompts.zh.trim()) {
     return prompts.zh.trim();
@@ -1654,7 +1658,8 @@ function setTextareaValue(shadowRoot, value) {
     if (currentPrompts.style) jsonData.style = currentPrompts.style;
     if (currentPrompts.lighting) jsonData.lighting = currentPrompts.lighting;
     if (currentPrompts.color_palette) jsonData.color_palette = currentPrompts.color_palette;
-    // Note: negative and parameters fields have been removed from JSON output
+    if (currentPrompts.negative) jsonData.negative = currentPrompts.negative;
+    if (currentPrompts.parameters) jsonData.parameters = currentPrompts.parameters;
     
     if (Object.keys(jsonData).length > 0) {
       textarea.value = JSON.stringify(jsonData, null, 2);

@@ -18,7 +18,8 @@
 - 简化为更精简的配置架构，集中管理UI字符串和提示词字段标签
 - 移除了DEFAULT_SETTINGS、USER_PROMPT_PRESETS、UI_STRINGS、SETTINGS_I18N、ERROR_CODES、ERROR_MESSAGES、分析配置等多层结构
 - 保留了核心配置项和国际化支持，但重新组织了结构
-- 新增了BASE_USER_PROMPT和ENGLISH_PROMPT_REQUIREMENT等关键配置
+- 新增了BASE_USER_PROMPT、ENGLISH_PROMPT_REQUIREMENT、RECREATE_MODE_*、GENERIC_*等关键配置
+- 增强了多语言字符串支持，包括完整的中英文界面文本
 
 ## 目录
 1. [简介](#简介)
@@ -53,8 +54,11 @@ subgraph "重构后的配置管理模块"
 Config[config.js<br/>共享配置文件]
 subgraph "核心配置分类"
 BasePrompt[BASE_USER_PROMPT<br/>基础用户提示词]
-SystemPrompt[System Prompt<br/>系统提示词模板]
-UserPrompt[User Prompt<br/>用户提示词模板]
+EnglishRequirement[ENGLISH_PROMPT_REQUIREMENT<br/>英文提示词要求]
+GenericConstraints[GENERIC_USER_CONSTRAINTS<br/>通用用户约束]
+SystemConstraints[GENERIC_SYSTEM_CONSTRAINTS<br/>通用系统约束]
+RecreateModeUser[RECREATE_MODE_USER_OVERLAY<br/>高还原度用户覆盖]
+RecreateModeSystem[RECREATE_MODE_SYSTEM_OVERLAY<br/>高还原度系统覆盖]
 DefaultSettings[DEFAULT_SETTINGS<br/>默认设置]
 Presets[USER_PROMPT_PRESETS<br/>提示词预设]
 UIStrings[UI_STRINGS<br/>界面字符串]
@@ -64,8 +68,11 @@ ErrorMessages[ERROR_MESSAGES<br/>错误消息]
 Analytics[分析配置<br/>PostHog配置]
 end
 Config --> BasePrompt
-Config --> SystemPrompt
-Config --> UserPrompt
+Config --> EnglishRequirement
+Config --> GenericConstraints
+Config --> SystemConstraints
+Config --> RecreateModeUser
+Config --> RecreateModeSystem
 Config --> DefaultSettings
 Config --> Presets
 Config --> UIStrings
@@ -87,13 +94,13 @@ Config --> Manifest
 ```
 
 **图表来源**
-- [config.js:1-307](file://config.js#L1-L307)
-- [options.js:1-200](file://options.js#L1-L200)
-- [background.js:1-200](file://background.js#L1-L200)
-- [content.js:1-200](file://content.js#L1-L200)
+- [config.js:1-321](file://config.js#L1-L321)
+- [options.js:1-800](file://options.js#L1-L800)
+- [background.js:1-800](file://background.js#L1-L800)
+- [content.js:1-800](file://content.js#L1-L800)
 
 **章节来源**
-- [config.js:1-307](file://config.js#L1-L307)
+- [config.js:1-321](file://config.js#L1-L321)
 - [manifest.json:1-45](file://manifest.json#L1-L45)
 
 ## 核心组件
@@ -108,55 +115,56 @@ BASE_USER_PROMPT: "以json格式描述这幅图,描述准确复刻原始图像�
 
 这个提示词为所有专业场景提供基础框架，确保生成的提示词具有统一的结构和质量标准。
 
-### 系统提示词模板 (System Prompt)
-
-系统提示词模板定义了AI模型的分析方法和输出格式要求。**更新** 现在包含更严格的JSON结构要求：
-
-```javascript
-systemPrompt: "You are an expert reverse prompt engineer specializing in ultra-accurate image recreation. Analyze the image with forensic precision and output strict JSON only.
-
-Return this exact top-level schema:
-{
-  "image_type": "...",
-  "aspect_ratio": "...",
-  "background": "...",
-  "subject": {
-    "identity": "...",
-    "appearance": "...",
-    "clothing": "...",
-    "posture": "...",
-    "position": "..."
-  },
-  "surrounding_elements": "...",
-  "composition": "...",
-  "text_content": "...",
-  "style": "...",
-  "lighting": "...",
-  "color_palette": "...",
-  "en": "..."
-}
-
-Rules:
-- Output JSON only. No markdown, no prose outside the JSON object.
-- Fill every structured field with image-specific details from this exact image.
-- Describe visible text with its content, position, color, and font style when present.
-- The top-level `en` field must be a single fluent English image-generation prompt that can be used directly for recreation.
-- Write the `en` field in English only.
-- Do not include zh, negative_zh, negative_en, negative, or parameters fields."
-```
-
-**更新** 新增了严格的JSON结构要求，确保输出格式的一致性和可解析性。
-
 ### 英语提示词要求 (ENGLISH_PROMPT_REQUIREMENT)
 
-英语提示词要求定义了英文提示词的生成规则：
+英语提示词要求定义了英文提示词的生成规则。**更新** 新增了严格的英文输出要求：
 
 ```javascript
 ENGLISH_PROMPT_REQUIREMENT:
   "Also include a top-level `en` field. The `en` value must be a single fluent English image-generation prompt that faithfully recreates the image. Write the `en` value in English only."
 ```
 
-这个配置确保生成的英文提示词能够直接用于图像生成任务。
+这个配置确保生成的英文提示词能够直接用于图像生成任务，并且保证英文字段的唯一性和准确性。
+
+### 通用用户约束 (GENERIC_USER_CONSTRAINTS)
+
+通用用户约束定义了图像重建的硬性约束规则。**更新** 新增了详细的重建约束要求：
+
+```javascript
+GENERIC_USER_CONSTRAINTS:
+  "Additional reconstruction constraints: 1. Prioritize hard constraints before atmosphere or style wording. 2. Treat typography, logos, labels, prices, QR codes, packaging graphics, background material, prop material, subject material, transparency, and layout positions as hard constraints. 3. For easy-to-drift elements, explicitly describe what the element is, where it is, its color/material, its orientation/scale, and when helpful what it is not. 4. For graphic design, posters, ads, packaging, and UI, make composition and text_content more detailed than usual. 5. Do not mistake a flat design backdrop for a natural scene, a transparent container for an opaque generic container, or a specific font style for a generic font category. 6. In the en field, write the hardest-to-drift constraints first, then lighting and style."
+```
+
+这些约束确保图像重建的准确性和一致性。
+
+### 通用系统约束 (GENERIC_SYSTEM_CONSTRAINTS)
+
+通用系统约束定义了AI模型的分析方法和输出格式要求。**更新** 新增了详细的系统约束规则：
+
+```javascript
+GENERIC_SYSTEM_CONSTRAINTS:
+  "ADDITIONAL RECONSTRUCTION CONSTRAINTS:\n- Prioritize exact reconstruction constraints over general style similarity.\n- Treat typography, text color, font category, line breaks, logos, icons, badges, prices, QR codes, packaging graphics, printed patterns, object material, transparency, silhouette, prop material, background substrate/material, and relative layout positions as hard constraints whenever visible.\n- Do not replace a flat graphic backdrop with a natural scene, a printed texture with clouds or fog, a transparent container with an opaque generic container, or a specific prop material with a generic substitute unless the image clearly shows that.\n- Describe fixed facts before mood words: color, material, shape, scale, count, position, direction, overlap, spacing, and hierarchy.\n- In composition, explicitly describe subject-to-canvas scale, margin relationships, alignment, overlap relationships, vertical or horizontal orientation, and the visual center.\n- In text_content, include exact visible wording, language, line breaks, reading direction, font category, weight, color, approximate size hierarchy, and placement.\n- In background, explicitly identify the substrate/material and whether it is a flat design background, paper texture, fabric, wood, gradient, bokeh, wall, sky, cloud, or studio backdrop.\n- If a detail is ambiguous, stay conservative and do not substitute it with a common generic alternative.\n- The en field must begin with the hardest-to-drift constraints first: subject identity, material, background material, typography style/color, layout, then lighting and style.\n- When an element is easy to drift, state both what it is and what it is not."
+```
+
+**更新** 新增了严格的JSON结构要求，确保输出格式的一致性和可解析性。
+
+### 高还原度模式用户覆盖 (RECREATE_MODE_USER_OVERLAY)
+
+高还原度模式的用户提示词覆盖。**更新** 新增了专业的高还原度分析要求：
+
+```javascript
+RECREATE_MODE_USER_OVERLAY:
+  "High fidelity reconstruction mode is enabled. Keep all existing instructions valid and add an outer layer of ultra-detailed reconstruction analysis. Ignore any earlier brevity or 750-character limit and be exhaustive. Capture tiny but reconstruction-critical details, including micro-texture, paper/fabric grain, brushstroke character, font size hierarchy, approximate coordinates or relative regions, subject occupancy ratio, spacing, margins, overlap, edge softness, reflections, opacity, printed patterns, seams, wrinkles, embossing, noise, highlight roll-off, and shadow falloff. Also include a top-level negative field and a top-level parameters field. The negative field must be an English negative prompt focused on preventing drift. The parameters field must summarize the most important reconstruction controls such as subject scale, layout lock, typography lock, material lock, background lock, camera/lens clues, lighting setup, and render quality."
+```
+
+### 高还原度模式系统覆盖 (RECREATE_MODE_SYSTEM_OVERLAY)
+
+高还原度模式的系统提示词覆盖。**更新** 新增了详细的高还原度分析规则：
+
+```javascript
+RECREATE_MODE_SYSTEM_OVERLAY:
+  "HIGH FIDELITY RECONSTRUCTION MODE:\n- This mode wraps around all existing instructions and adds extra detail requirements without replacing the base rules.\n- Ignore any earlier brevity or character-limit instruction. Produce exhaustive, reconstruction-oriented output.\n- Preserve all existing fields and additionally include:\n  \"negative\": \"an English negative prompt that suppresses likely drift errors\",\n  \"parameters\": {\n    \"subject_scale\": \"...\",\n    \"layout_lock\": \"...\",\n    \"typography_lock\": \"...\",\n    \"material_lock\": \"...\",\n    \"background_lock\": \"...\",\n    \"camera_lens\": \"...\",\n    \"lighting_setup\": \"...\",\n    \"render_quality\": \"...\"\n  }\n- Every visible element should be described as precisely as possible, from micro texture and edge quality to relative position, size proportion, spacing, overlap, and margin relationships.\n- When possible, express placement using approximate canvas regions or percentages.\n- Typography must include approximate size hierarchy, weight, style category, stroke behavior, line spacing, and positional relationships.\n- Materials must include translucency/opacity, gloss or matte character, grain, wear, embossing, reflection behavior, and printed or engraved details when visible.\n- The negative field must focus on preventing common substitutions, layout drift, wrong material, wrong typography, wrong background type, wrong prop type, and genericization.\n- The parameters field must be a structured reconstruction-control summary. Use Chinese for values by default, but camera/lens terms may remain in English when more natural."
+```
 
 ### 默认设置 (DEFAULT_SETTINGS)
 
@@ -249,7 +257,7 @@ User --> Unknown[UNKNOWN]
 ```
 
 **图表来源**
-- [config.js:251-263](file://config.js#L251-L263)
+- [config.js:263-275](file://config.js#L263-L275)
 
 ### 错误消息 (ERROR_MESSAGES)
 
@@ -271,7 +279,7 @@ User --> Unknown[UNKNOWN]
 **更新** 分析配置现在使用base64编码的项目密钥，提升安全性。
 
 **章节来源**
-- [config.js:1-307](file://config.js#L1-L307)
+- [config.js:1-321](file://config.js#L1-L321)
 
 ## 架构概览
 
@@ -318,9 +326,9 @@ Broadcast --> Panel
 ```
 
 **图表来源**
-- [config.js:1-307](file://config.js#L1-L307)
-- [options.js:1-200](file://options.js#L1-L200)
-- [background.js:1-200](file://background.js#L1-L200)
+- [config.js:1-321](file://config.js#L1-L321)
+- [options.js:1-800](file://options.js#L1-L800)
+- [background.js:1-800](file://background.js#L1-L800)
 
 ### 配置验证机制
 
@@ -347,8 +355,8 @@ Background->>Background : 更新内部配置
 ```
 
 **图表来源**
-- [background.js:151-164](file://background.js#L151-L164)
-- [options.js:1-200](file://options.js#L1-L200)
+- [background.js:587-598](file://background.js#L587-L598)
+- [options.js:1-800](file://options.js#L1-L800)
 
 ### 动态更新策略
 
@@ -361,7 +369,7 @@ Background->>Background : 更新内部配置
 5. **严格格式验证**：确保配置项符合格式要求
 
 **章节来源**
-- [options.js:1-200](file://options.js#L1-L200)
+- [options.js:1-800](file://options.js#L1-L800)
 - [background.js:151-164](file://background.js#L151-L164)
 
 ## 详细组件分析
@@ -375,6 +383,10 @@ classDiagram
 class ImgPromptConfig {
 +BASE_USER_PROMPT : string
 +ENGLISH_PROMPT_REQUIREMENT : string
++GENERIC_USER_CONSTRAINTS : string
++GENERIC_SYSTEM_CONSTRAINTS : string
++RECREATE_MODE_USER_OVERLAY : string
++RECREATE_MODE_SYSTEM_OVERLAY : string
 +DEFAULT_SETTINGS : Object
 +USER_PROMPT_PRESETS : Object
 +UI_STRINGS : Object
@@ -434,6 +446,10 @@ class ERROR_CODES {
 }
 ImgPromptConfig --> BASE_USER_PROMPT
 ImgPromptConfig --> ENGLISH_PROMPT_REQUIREMENT
+ImgPromptConfig --> GENERIC_USER_CONSTRAINTS
+ImgPromptConfig --> GENERIC_SYSTEM_CONSTRAINTS
+ImgPromptConfig --> RECREATE_MODE_USER_OVERLAY
+ImgPromptConfig --> RECREATE_MODE_SYSTEM_OVERLAY
 ImgPromptConfig --> DEFAULT_SETTINGS
 ImgPromptConfig --> USER_PROMPT_PRESETS
 ImgPromptConfig --> UI_STRINGS
@@ -446,7 +462,7 @@ ImgPromptConfig --> ANALYTICS_CONFIG_KEY
 ```
 
 **图表来源**
-- [config.js:1-307](file://config.js#L1-L307)
+- [config.js:1-321](file://config.js#L1-L321)
 
 ### API 端点配置
 
@@ -490,8 +506,8 @@ FieldValidation --> FormatValidation
 ```
 
 **图表来源**
-- [config.js:11-29](file://config.js#L11-L29)
-- [background.js:151-164](file://background.js#L151-L164)
+- [config.js:8-9](file://config.js#L8-L9)
+- [background.js:627-637](file://background.js#L627-L637)
 
 ### 界面语言选项
 
@@ -514,8 +530,8 @@ Panel-->>User : 显示新语言界面
 ```
 
 **图表来源**
-- [options.js:1-200](file://options.js#L1-L200)
-- [content.js:136-175](file://content.js#L136-L175)
+- [options.js:1-800](file://options.js#L1-L800)
+- [content.js:140-201](file://content.js#L140-L201)
 
 ### 行为偏好配置
 
@@ -572,8 +588,8 @@ Panel-->>User : 显示新语言界面
 - **英语提示词**：包含英文复刻提示词生成要求
 
 **章节来源**
-- [config.js:31-43](file://config.js#L31-L43)
-- [options.js:1-200](file://options.js#L1-L200)
+- [config.js:43-55](file://config.js#L43-L55)
+- [options.js:1-800](file://options.js#L1-L800)
 - [content.js:58-88](file://content.js#L58-L88)
 
 ## 依赖关系分析
@@ -620,10 +636,10 @@ FormatValidation --> BackgroundJS
 ```
 
 **图表来源**
-- [config.js:1-307](file://config.js#L1-L307)
-- [options.js:1-200](file://options.js#L1-L200)
-- [background.js:1-200](file://background.js#L1-L200)
-- [content.js:1-200](file://content.js#L1-L200)
+- [config.js:1-321](file://config.js#L1-L321)
+- [options.js:1-800](file://options.js#L1-L800)
+- [background.js:1-800](file://background.js#L1-L800)
+- [content.js:1-800](file://content.js#L1-L800)
 
 ### 配置验证机制
 
@@ -653,7 +669,7 @@ Error5 --> Feedback
 ```
 
 **图表来源**
-- [background.js:151-164](file://background.js#L151-L164)
+- [background.js:587-598](file://background.js#L587-L598)
 
 ### 动态更新策略
 
@@ -680,11 +696,11 @@ Options-->>User : 显示保存成功
 ```
 
 **图表来源**
-- [options.js:1-200](file://options.js#L1-L200)
+- [options.js:1-800](file://options.js#L1-L800)
 - [background.js:151-164](file://background.js#L151-L164)
 
 **章节来源**
-- [options.js:1-200](file://options.js#L1-L200)
+- [options.js:1-800](file://options.js#L1-L800)
 - [background.js:151-164](file://background.js#L151-L164)
 
 ## 性能考虑
