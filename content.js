@@ -36,7 +36,7 @@ const COMPRESSED_IMAGE_QUALITY = 0.86;
 let lastContextImage = null;
 let activeRequestId = "";
 let activeLanguage = "zh";
-let currentPrompts = { zh: "", en: "" };
+let currentPrompts = { image_type: "", aspect_ratio: "", background: "", subject: null, surrounding_elements: "", composition: "", text_content: "", style: "", lighting: "", color_palette: "", negative: null, parameters: null };
 let currentSource = { srcUrl: "", imageDataUrl: "" };
 let currentTrigger = "unknown";
 let isGenerating = false;
@@ -53,6 +53,32 @@ let progressTimerId = 0;
 let currentProgressText = "";
 let panelDismissed = false;
 let isJsonMode = false;
+
+// Convert structured prompt fields to readable text for normal mode display
+function buildReadableText(prompts) {
+  if (!prompts) return "";
+  const parts = [];
+  if (prompts.image_type) parts.push(prompts.image_type);
+  if (prompts.aspect_ratio) parts.push("宽高比: " + prompts.aspect_ratio);
+  if (prompts.background) parts.push("背景: " + prompts.background);
+  if (prompts.subject) {
+    const s = prompts.subject;
+    const subParts = [];
+    if (s.identity) subParts.push(s.identity);
+    if (s.appearance) subParts.push(s.appearance);
+    if (s.clothing) subParts.push(s.clothing);
+    if (s.posture) subParts.push(s.posture);
+    if (s.position) subParts.push(s.position);
+    if (subParts.length) parts.push("主体: " + subParts.join(", "));
+  }
+  if (prompts.surrounding_elements) parts.push("环绕元素: " + prompts.surrounding_elements);
+  if (prompts.composition) parts.push("构图: " + prompts.composition);
+  if (prompts.text_content) parts.push("文字: " + prompts.text_content);
+  if (prompts.style) parts.push("风格: " + prompts.style);
+  if (prompts.lighting) parts.push("光线: " + prompts.lighting);
+  if (prompts.color_palette) parts.push("色彩: " + prompts.color_palette);
+  return parts.join("\n");
+}
 
 function isExtensionContextError(error) {
   const message = error instanceof Error ? error.message : String(error || "");
@@ -255,7 +281,7 @@ async function handleStartAnalysis(message) {
     srcUrl: message.srcUrl || "",
     imageDataUrl: message.imageDataUrl || ""
   };
-  currentPrompts = { zh: "", en: "" };
+  currentPrompts = { image_type: "", aspect_ratio: "", background: "", subject: null, surrounding_elements: "", composition: "", text_content: "", style: "", lighting: "", color_palette: "", negative: null, parameters: null };
 
   const panel = ensurePanel();
   const dict = UI_STRINGS[uiLanguage] || UI_STRINGS.zh;
@@ -352,13 +378,20 @@ function handleResult(message) {
     return;
   }
 
-  // Parse full structured prompt data including negative prompts and parameters
+  // Parse structured prompt data - only visual analysis fields
   const prompts = message.prompts || {};
   currentPrompts = {
-    zh: prompts.zh || "",
-    en: prompts.en || "",
-    negative_zh: prompts.negative_zh || "",
-    negative_en: prompts.negative_en || "",
+    image_type: prompts.image_type || "",
+    aspect_ratio: prompts.aspect_ratio || "",
+    background: prompts.background || "",
+    subject: prompts.subject || null,
+    surrounding_elements: prompts.surrounding_elements || "",
+    composition: prompts.composition || "",
+    text_content: prompts.text_content || "",
+    style: prompts.style || "",
+    lighting: prompts.lighting || "",
+    color_palette: prompts.color_palette || "",
+    negative: prompts.negative || null,
     parameters: prompts.parameters || null
   };
   currentSource = message.source || currentSource;
@@ -371,7 +404,7 @@ function handleResult(message) {
   updateProgress(100, dict.generationComplete);
   setStatus(panel, dict.completed);
   setError(panel, "");
-  setTextareaValue(panel, currentPrompts[activeLanguage] || "");
+  setTextareaValue(panel, buildReadableText(currentPrompts));
   resetCopyButton(panel);
   setScannerVisibility(panel, false);
   setContentVisibility(panel, true);
@@ -390,10 +423,17 @@ function handleLoadHistoryItem(message) {
   panelDismissed = false;
   const prompts = historyData.prompts || {};
   currentPrompts = {
-    zh: prompts.zh || "",
-    en: prompts.en || "",
-    negative_zh: prompts.negative_zh || "",
-    negative_en: prompts.negative_en || "",
+    image_type: prompts.image_type || "",
+    aspect_ratio: prompts.aspect_ratio || "",
+    background: prompts.background || "",
+    subject: prompts.subject || null,
+    surrounding_elements: prompts.surrounding_elements || "",
+    composition: prompts.composition || "",
+    text_content: prompts.text_content || "",
+    style: prompts.style || "",
+    lighting: prompts.lighting || "",
+    color_palette: prompts.color_palette || "",
+    negative: prompts.negative || null,
     parameters: prompts.parameters || null
   };
   currentSource = {
@@ -428,7 +468,7 @@ function handleLoadHistoryItem(message) {
   updateProgress(100, dict.generationComplete);
   setStatus(panel, dict.completed);
   setError(panel, "");
-  setTextareaValue(panel, currentPrompts[activeLanguage] || "");
+  setTextareaValue(panel, buildReadableText(currentPrompts));
   resetCopyButton(panel);
   setScannerVisibility(panel, false);
   setContentVisibility(panel, true);
@@ -1407,7 +1447,7 @@ function bindPanelEvents(shadowRoot) {
       
       // In JSON mode, keep showing JSON regardless of language switch
       if (!isJsonMode) {
-        setTextareaValue(shadowRoot, currentPrompts[activeLanguage] || "");
+        setTextareaValue(shadowRoot, buildReadableText(currentPrompts));
       }
       
       trackEvent("prompt_language_switched", {
@@ -1420,22 +1460,49 @@ function bindPanelEvents(shadowRoot) {
   });
 
   shadowRoot.querySelector(".ipi-textarea")?.addEventListener("input", (event) => {
-    const value = event.target.value;
-    currentPrompts[activeLanguage] = value;
+    // In JSON mode, try to parse and update structured fields
+    // In normal mode, we don't update structured fields from plain text
+    if (isJsonMode) {
+      try {
+        const parsed = JSON.parse(event.target.value);
+        if (parsed.image_type !== undefined) currentPrompts.image_type = parsed.image_type;
+        if (parsed.aspect_ratio !== undefined) currentPrompts.aspect_ratio = parsed.aspect_ratio;
+        if (parsed.background !== undefined) currentPrompts.background = parsed.background;
+        if (parsed.subject !== undefined) currentPrompts.subject = parsed.subject;
+        if (parsed.surrounding_elements !== undefined) currentPrompts.surrounding_elements = parsed.surrounding_elements;
+        if (parsed.composition !== undefined) currentPrompts.composition = parsed.composition;
+        if (parsed.text_content !== undefined) currentPrompts.text_content = parsed.text_content;
+        if (parsed.style !== undefined) currentPrompts.style = parsed.style;
+        if (parsed.lighting !== undefined) currentPrompts.lighting = parsed.lighting;
+        if (parsed.color_palette !== undefined) currentPrompts.color_palette = parsed.color_palette;
+        if (parsed.negative !== undefined) currentPrompts.negative = parsed.negative;
+        if (parsed.parameters !== undefined) currentPrompts.parameters = parsed.parameters;
+      } catch (e) {
+        // Invalid JSON, ignore
+      }
+    }
   });
 
   shadowRoot.querySelector('[data-action="copy"]')?.addEventListener("click", async () => {
     let text;
     if (isJsonMode && currentPrompts) {
+      // Build full structured JSON for copy
       const jsonData = {};
-      if (currentPrompts.zh) jsonData.zh = currentPrompts.zh;
-      if (currentPrompts.en) jsonData.en = currentPrompts.en;
-      if (currentPrompts.negative_zh) jsonData.negative_zh = currentPrompts.negative_zh;
-      if (currentPrompts.negative_en) jsonData.negative_en = currentPrompts.negative_en;
+      if (currentPrompts.image_type) jsonData.image_type = currentPrompts.image_type;
+      if (currentPrompts.aspect_ratio) jsonData.aspect_ratio = currentPrompts.aspect_ratio;
+      if (currentPrompts.background) jsonData.background = currentPrompts.background;
+      if (currentPrompts.subject) jsonData.subject = currentPrompts.subject;
+      if (currentPrompts.surrounding_elements) jsonData.surrounding_elements = currentPrompts.surrounding_elements;
+      if (currentPrompts.composition) jsonData.composition = currentPrompts.composition;
+      if (currentPrompts.text_content) jsonData.text_content = currentPrompts.text_content;
+      if (currentPrompts.style) jsonData.style = currentPrompts.style;
+      if (currentPrompts.lighting) jsonData.lighting = currentPrompts.lighting;
+      if (currentPrompts.color_palette) jsonData.color_palette = currentPrompts.color_palette;
+      if (currentPrompts.negative) jsonData.negative = currentPrompts.negative;
       if (currentPrompts.parameters) jsonData.parameters = currentPrompts.parameters;
       text = JSON.stringify(jsonData, null, 2);
     } else {
-      text = currentPrompts[activeLanguage] || "";
+      text = buildReadableText(currentPrompts);
     }
     if (!text) {
       return;
@@ -1463,20 +1530,11 @@ function bindPanelEvents(shadowRoot) {
     if (jsonBtn) {
       jsonBtn.classList.toggle("active", isJsonMode);
     }
-    // Refresh textarea display
-    if (isJsonMode && currentPrompts) {
-      const jsonData = {};
-      if (currentPrompts.zh) jsonData.zh = currentPrompts.zh;
-      if (currentPrompts.en) jsonData.en = currentPrompts.en;
-      if (currentPrompts.negative_zh) jsonData.negative_zh = currentPrompts.negative_zh;
-      if (currentPrompts.negative_en) jsonData.negative_en = currentPrompts.negative_en;
-      if (currentPrompts.parameters) jsonData.parameters = currentPrompts.parameters;
-      
-      if (Object.keys(jsonData).length > 0) {
-        setTextareaValue(shadowRoot, JSON.stringify(jsonData, null, 2));
-      }
+    // Refresh textarea display using unified function
+    if (isJsonMode) {
+      setTextareaValue(shadowRoot, "");
     } else {
-      setTextareaValue(shadowRoot, currentPrompts[activeLanguage] || "");
+      setTextareaValue(shadowRoot, buildReadableText(currentPrompts));
     }
   });
 
@@ -1589,12 +1647,20 @@ function setTextareaValue(shadowRoot, value) {
   if (!textarea) return;
   
   if (isJsonMode && currentPrompts) {
-    // Build complete JSON with all available fields
+    // Build complete structured JSON with all visual analysis fields
     const jsonData = {};
-    if (currentPrompts.zh) jsonData.zh = currentPrompts.zh;
-    if (currentPrompts.en) jsonData.en = currentPrompts.en;
-    if (currentPrompts.negative_zh) jsonData.negative_zh = currentPrompts.negative_zh;
-    if (currentPrompts.negative_en) jsonData.negative_en = currentPrompts.negative_en;
+    // Structured visual analysis fields (in logical analysis order)
+    if (currentPrompts.image_type) jsonData.image_type = currentPrompts.image_type;
+    if (currentPrompts.aspect_ratio) jsonData.aspect_ratio = currentPrompts.aspect_ratio;
+    if (currentPrompts.background) jsonData.background = currentPrompts.background;
+    if (currentPrompts.subject) jsonData.subject = currentPrompts.subject;
+    if (currentPrompts.surrounding_elements) jsonData.surrounding_elements = currentPrompts.surrounding_elements;
+    if (currentPrompts.composition) jsonData.composition = currentPrompts.composition;
+    if (currentPrompts.text_content) jsonData.text_content = currentPrompts.text_content;
+    if (currentPrompts.style) jsonData.style = currentPrompts.style;
+    if (currentPrompts.lighting) jsonData.lighting = currentPrompts.lighting;
+    if (currentPrompts.color_palette) jsonData.color_palette = currentPrompts.color_palette;
+    if (currentPrompts.negative) jsonData.negative = currentPrompts.negative;
     if (currentPrompts.parameters) jsonData.parameters = currentPrompts.parameters;
     
     if (Object.keys(jsonData).length > 0) {

@@ -863,23 +863,37 @@ function normalizePromptResult(rawResult, lang = "zh") {
     }
   }
 
-  const zh = String(parsed?.zh || "").trim();
-  const en = String(parsed?.en || "").trim();
-  const negative_zh = String(parsed?.negative_zh || "").trim();
-  const negative_en = String(parsed?.negative_en || "").trim();
-  const parameters = parsed?.parameters || null;
+  // Require at least one structured field to be present
+  const hasStructuredContent = parsed?.image_type || parsed?.background || parsed?.subject ||
+    parsed?.style || parsed?.lighting || parsed?.color_palette || parsed?.zh || parsed?.en;
 
-  if (!zh && !en) {
+  if (!hasStructuredContent) {
     throw new Error(dict.missingFields);
   }
 
-  return {
-    zh: zh || en,
-    en: en || zh,
-    negative_zh: negative_zh,
-    negative_en: negative_en,
-    parameters: parameters
-  };
+  // Build result - pass through ALL fields from AI response
+  const result = {};
+
+  // Copy structured visual analysis fields directly
+  if (parsed?.image_type) result.image_type = parsed.image_type;
+  if (parsed?.aspect_ratio) result.aspect_ratio = parsed.aspect_ratio;
+  if (parsed?.background) result.background = parsed.background;
+  if (parsed?.subject) result.subject = parsed.subject;
+  if (parsed?.surrounding_elements) result.surrounding_elements = parsed.surrounding_elements;
+  if (parsed?.composition) result.composition = parsed.composition;
+  if (parsed?.text_content) result.text_content = parsed.text_content;
+  if (parsed?.style) result.style = parsed.style;
+  if (parsed?.lighting) result.lighting = parsed.lighting;
+  if (parsed?.color_palette) result.color_palette = parsed.color_palette;
+  if (parsed?.negative) result.negative = parsed.negative;
+  if (parsed?.parameters) result.parameters = parsed.parameters;
+
+  // For backward compatibility: if AI still returns zh/en, preserve them
+  // but DO NOT generate them from structured fields (avoid redundancy)
+  if (parsed?.zh) result.zh = String(parsed.zh).trim();
+  if (parsed?.en) result.en = String(parsed.en).trim();
+
+  return result;
 }
 
 function extractOpenAICompatibleContent(payload) {

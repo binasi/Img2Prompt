@@ -91,8 +91,13 @@ function enterCreateCustomMode() {
   
   currentEditingId = null;
   customTitleInput.value = "";
-  form.userPrompt.value = "";
+  // 默认使用通用预设的提示词
+  form.userPrompt.value = PRESETS["general"] || "";
   showCustomCreateMode();
+  
+  // 同步更新标题输入框，让用户知道这是通用预设
+  const lang = document.querySelector('input[name="uiLanguage"]:checked')?.value || 'zh';
+  customTitleInput.placeholder = lang === 'zh' ? '基于通用预设的自定义提示词...' : 'Custom prompt based on General preset...';
 }
 
 function updateActiveChip(currentPrompt) {
@@ -158,14 +163,19 @@ customDeleteBtn.addEventListener("click", async () => {
 });
 
 customCancelBtn.addEventListener("click", async () => {
-  const res = await chrome.storage.local.get("userPrompt");
-  if (res.userPrompt) {
-    form.userPrompt.value = res.userPrompt;
-    updateActiveChip(res.userPrompt);
-  } else {
-    form.userPrompt.value = PRESETS["general"] || "";
-    updateActiveChip(form.userPrompt.value);
-  }
+  // 隐藏自定义编辑视图
+  customModeView.style.display = "none";
+  
+  // 恢复到通用预设
+  form.userPrompt.value = PRESETS["general"] || "";
+  updateActiveChip(form.userPrompt.value);
+  
+  // 重置编辑状态
+  currentEditingId = null;
+  customDeleteBtn.style.display = "none";
+  
+  // 保存恢复后的设置
+  await handleAutoSave();
 });
 
 function renderCustomChips() {
