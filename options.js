@@ -39,9 +39,18 @@ presetChipsContainer.addEventListener("click", (e) => {
     return;
   }
 
+  // Smart stacking logic
+  const basePrompt = ImgPromptConfig.BASE_USER_PROMPT;
+  
   if (PRESETS && PRESETS[presetKey]) {
-    form.userPrompt.value = PRESETS[presetKey];
-    updateActiveChip(PRESETS[presetKey]);
+    if (presetKey === "general") {
+      // General: only base prompt
+      form.userPrompt.value = basePrompt;
+    } else {
+      // Scene preset: base + scene focus
+      form.userPrompt.value = basePrompt + PRESETS[presetKey];
+    }
+    updateActiveChip(form.userPrompt.value);
     handleAutoSave();
     return;
   }

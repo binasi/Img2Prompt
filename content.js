@@ -1128,7 +1128,7 @@ function buildPanelMarkup() {
         margin-top: 4px;
       }
       .ipi-action {
-        min-width: 112px;
+        min-width: 80px;
         color: #111014;
         background: linear-gradient(90deg, #8bd3ff, #ffc85f 55%, #f09cc0);
         box-shadow: 0 14px 30px rgba(255, 193, 94, 0.18);

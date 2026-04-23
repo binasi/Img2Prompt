@@ -636,6 +636,35 @@ function resolveRequestFormat(settings) {
   return "openai";
 }
 
+// Build user prompt with smart stacking logic
+function buildUserPrompt(userPrompt, pageHints) {
+  const basePrompt = ImgPromptConfig.BASE_USER_PROMPT;
+  const presets = ImgPromptConfig.USER_PROMPT_PRESETS;
+  
+  // Check if userPrompt matches a preset (not general)
+  let scenePrompt = "";
+  if (userPrompt && presets) {
+    for (const [key, presetText] of Object.entries(presets)) {
+      if (key !== "general" && userPrompt === basePrompt + presetText) {
+        // User selected a specific scene preset
+        scenePrompt = presetText;
+        break;
+      }
+    }
+  }
+  
+  // Build final prompt: base + scene focus (if any) + page hints
+  const parts = [basePrompt];
+  if (scenePrompt) {
+    parts.push(scenePrompt);
+  }
+  if (pageHints) {
+    parts.push(pageHints);
+  }
+  
+  return parts.filter(Boolean).join("\n\n");
+}
+
 async function requestViaOpenAICompatible({ settings, imageInput, pageHints, signal }) {
   const modelName = String(settings.model || "").toLowerCase();
   if (modelName.startsWith("deepseek")) {
@@ -658,7 +687,7 @@ async function requestViaOpenAICompatible({ settings, imageInput, pageHints, sig
         content: [
           {
             type: "text",
-            text: [settings.userPrompt, pageHints].filter(Boolean).join("\n\n")
+            text: buildUserPrompt(settings.userPrompt, pageHints)
           },
           {
             type: "image_url",
@@ -742,7 +771,7 @@ async function requestViaAnthropic({ settings, imageInput, pageHints, signal }) 
           content: [
             {
               type: "text",
-              text: [settings.userPrompt, pageHints].filter(Boolean).join("\n\n")
+              text: buildUserPrompt(settings.userPrompt, pageHints)
             },
             {
               type: "image",
