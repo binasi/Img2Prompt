@@ -287,14 +287,117 @@ function renderHistory(history) {
   });
 }
 
+function buildHistoryStructuredPreview(prompts, lang = "zh") {
+  if (!prompts) return "";
+
+  const labels = lang === "en"
+    ? {
+        aspectRatio: "Aspect Ratio",
+        background: "Background",
+        subject: "Subject",
+        surrounding: "Surrounding Elements",
+        composition: "Composition",
+        text: "Text",
+        style: "Style",
+        lighting: "Lighting",
+        color: "Color Palette"
+      }
+    : {
+        aspectRatio: "宽高比",
+        background: "背景",
+        subject: "主体",
+        surrounding: "环绕元素",
+        composition: "构图",
+        text: "文字",
+        style: "风格",
+        lighting: "光线",
+        color: "色彩"
+      };
+
+  const parts = [];
+  if (prompts.image_type) parts.push(String(prompts.image_type).trim());
+  if (prompts.aspect_ratio) parts.push(`${labels.aspectRatio}: ${String(prompts.aspect_ratio).trim()}`);
+  if (prompts.background) parts.push(`${labels.background}: ${String(prompts.background).trim()}`);
+  if (prompts.subject) {
+    const subject = prompts.subject;
+    const subjectParts = [
+      subject.identity,
+      subject.appearance,
+      subject.clothing,
+      subject.posture,
+      subject.position
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).trim());
+
+    if (subjectParts.length) {
+      parts.push(`${labels.subject}: ${subjectParts.join(", ")}`);
+    }
+  }
+  if (prompts.surrounding_elements) parts.push(`${labels.surrounding}: ${String(prompts.surrounding_elements).trim()}`);
+  if (prompts.composition) parts.push(`${labels.composition}: ${String(prompts.composition).trim()}`);
+  if (prompts.text_content) parts.push(`${labels.text}: ${String(prompts.text_content).trim()}`);
+  if (prompts.style) parts.push(`${labels.style}: ${String(prompts.style).trim()}`);
+  if (prompts.lighting) parts.push(`${labels.lighting}: ${String(prompts.lighting).trim()}`);
+  if (prompts.color_palette) parts.push(`${labels.color}: ${String(prompts.color_palette).trim()}`);
+
+  return parts.join(" ");
+}
+
+function buildHistoryJsonPreview(prompts) {
+  if (!prompts) return "";
+
+  const jsonData = {};
+  const keys = [
+    "image_type",
+    "aspect_ratio",
+    "background",
+    "subject",
+    "surrounding_elements",
+    "composition",
+    "text_content",
+    "style",
+    "lighting",
+    "color_palette"
+  ];
+
+  keys.forEach((key) => {
+    const value = prompts[key];
+    if (value === undefined || value === null) return;
+    if (typeof value === "string" && !value.trim()) return;
+    jsonData[key] = value;
+  });
+
+  return Object.keys(jsonData).length ? JSON.stringify(jsonData) : "";
+}
+
+function buildHistoryPreviewText(prompts, mode) {
+  if (!prompts) return "";
+
+  if (mode === "zh") {
+    return String(prompts.zh || "").trim() || buildHistoryStructuredPreview(prompts, "zh");
+  }
+
+  if (mode === "en") {
+    return String(prompts.en || "").trim() || buildHistoryStructuredPreview(prompts, "en");
+  }
+
+  if (mode === "json") {
+    return buildHistoryJsonPreview(prompts);
+  }
+
+  return "";
+}
+
 function createHistoryItem(item) {
   const div = document.createElement("div");
   div.className = "history-item";
   div.style.cssText = "background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; display: flex; gap: 12px; cursor: pointer; transition: all 150ms ease;";
   
   const time = new Date(item.timestamp).toLocaleString();
-  const zhPrompt = item.prompts?.zh || "";
-  const enPrompt = item.prompts?.en || "";
+  const zhPrompt = buildHistoryPreviewText(item.prompts, "zh");
+  const enPrompt = buildHistoryPreviewText(item.prompts, "en");
+  const jsonPrompt = buildHistoryPreviewText(item.prompts, "json");
   const hasImage = item.imageDataUrl && item.imageDataUrl.startsWith("data:image");
   
   const imageHtml = hasImage
@@ -315,11 +418,14 @@ function createHistoryItem(item) {
           <button type="button" class="history-delete-btn" data-id="${item.id}" style="border: 0; border-radius: 4px; padding: 3px 8px; font-size: 10px; font-weight: 600; cursor: pointer; background: rgba(255,107,107,0.15); color: #ff6b6b; transition: all 150ms ease;" data-i18n="historyDelete">删除</button>
         </div>
       </div>
-      <div style="font-size: 12px; color: rgba(255,255,255,0.85); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-        <span style="color: #8bd3ff; font-weight: 600;">中文:</span> ${escapeHtml(zhPrompt.substring(0, 100))}${zhPrompt.length > 100 ? '...' : ''}
+      <div title="${escapeHtml(zhPrompt)}" style="font-size: 12px; color: rgba(255,255,255,0.85); line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        <span style="color: #8bd3ff; font-weight: 600;">中文:</span> ${escapeHtml(zhPrompt)}
       </div>
-      <div style="font-size: 11px; color: rgba(255,255,255,0.6); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-        <span style="color: #f09cc0; font-weight: 600;">EN:</span> ${escapeHtml(enPrompt.substring(0, 100))}${enPrompt.length > 100 ? '...' : ''}
+      <div title="${escapeHtml(enPrompt)}" style="font-size: 11px; color: rgba(255,255,255,0.68); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        <span style="color: #f09cc0; font-weight: 600;">EN:</span> ${escapeHtml(enPrompt)}
+      </div>
+      <div title="${escapeHtml(jsonPrompt)}" style="font-size: 11px; color: rgba(255,255,255,0.56); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        <span style="color: #f7d774; font-weight: 600;">JSON:</span> ${escapeHtml(jsonPrompt)}
       </div>
     </div>
   `;

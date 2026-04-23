@@ -36,7 +36,7 @@ const COMPRESSED_IMAGE_QUALITY = 0.86;
 let lastContextImage = null;
 let activeRequestId = "";
 let activeLanguage = "zh";
-let currentPrompts = { image_type: "", aspect_ratio: "", background: "", subject: null, surrounding_elements: "", composition: "", text_content: "", style: "", lighting: "", color_palette: "", negative: null, parameters: null };
+let currentPrompts = { zh: "", en: "", image_type: "", aspect_ratio: "", background: "", subject: null, surrounding_elements: "", composition: "", text_content: "", style: "", lighting: "", color_palette: "", negative: null, parameters: null };
 let currentSource = { srcUrl: "", imageDataUrl: "" };
 let currentTrigger = "unknown";
 let isGenerating = false;
@@ -57,6 +57,12 @@ let isJsonMode = false;
 // Convert structured prompt fields to readable text for normal mode display
 function buildReadableText(prompts) {
   if (!prompts) return "";
+  if (activeLanguage === "en" && typeof prompts.en === "string" && prompts.en.trim()) {
+    return prompts.en.trim();
+  }
+  if (activeLanguage === "zh" && typeof prompts.zh === "string" && prompts.zh.trim()) {
+    return prompts.zh.trim();
+  }
   const dict = UI_STRINGS[activeLanguage] || UI_STRINGS.zh;
   const parts = [];
   if (prompts.image_type) parts.push(prompts.image_type);
@@ -282,7 +288,7 @@ async function handleStartAnalysis(message) {
     srcUrl: message.srcUrl || "",
     imageDataUrl: message.imageDataUrl || ""
   };
-  currentPrompts = { image_type: "", aspect_ratio: "", background: "", subject: null, surrounding_elements: "", composition: "", text_content: "", style: "", lighting: "", color_palette: "", negative: null, parameters: null };
+  currentPrompts = { zh: "", en: "", image_type: "", aspect_ratio: "", background: "", subject: null, surrounding_elements: "", composition: "", text_content: "", style: "", lighting: "", color_palette: "", negative: null, parameters: null };
 
   const panel = ensurePanel();
   const dict = UI_STRINGS[uiLanguage] || UI_STRINGS.zh;
@@ -373,6 +379,8 @@ function handleResult(message) {
   // Parse structured prompt data - only visual analysis fields
   const prompts = message.prompts || {};
   currentPrompts = {
+    zh: prompts.zh || "",
+    en: prompts.en || "",
     image_type: prompts.image_type || "",
     aspect_ratio: prompts.aspect_ratio || "",
     background: prompts.background || "",
@@ -415,6 +423,8 @@ function handleLoadHistoryItem(message) {
   panelDismissed = false;
   const prompts = historyData.prompts || {};
   currentPrompts = {
+    zh: prompts.zh || "",
+    en: prompts.en || "",
     image_type: prompts.image_type || "",
     aspect_ratio: prompts.aspect_ratio || "",
     background: prompts.background || "",

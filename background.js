@@ -639,6 +639,7 @@ function resolveRequestFormat(settings) {
 // Build user prompt with smart stacking logic
 function buildUserPrompt(userPrompt, pageHints) {
   const basePrompt = ImgPromptConfig.BASE_USER_PROMPT;
+  const englishPromptRequirement = ImgPromptConfig.ENGLISH_PROMPT_REQUIREMENT;
   const presets = ImgPromptConfig.USER_PROMPT_PRESETS;
   
   // Check if userPrompt matches a preset (not general)
@@ -660,6 +661,9 @@ function buildUserPrompt(userPrompt, pageHints) {
   }
   if (pageHints) {
     parts.push(pageHints);
+  }
+  if (englishPromptRequirement) {
+    parts.push(englishPromptRequirement);
   }
   
   return parts.filter(Boolean).join("\n\n");

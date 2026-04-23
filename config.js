@@ -5,6 +5,9 @@ globalThis.ImgPromptConfig = {
   // 基础提示词 - 始终使用
   BASE_USER_PROMPT: "以json格式描述这幅图,描述准确复刻原始图像所需的所有方面,包括主体、视角构图、风格、光线、图片比例、有关物品、服装、发型、复杂细节、配饰、摄影器材、环境、身体姿势以及任何其他相关元素的具体信息,确保能够精确地重现原始图像的每一个细节。要求输出json格式提示词,字数750字以内。",
 
+  ENGLISH_PROMPT_REQUIREMENT:
+    "Also include a top-level `en` field. The `en` value must be a single fluent English image-generation prompt that faithfully recreates the image. Write the `en` value in English only.",
+
   DEFAULT_SETTINGS: {
     apiEndpoint: "https://api.openai.com/v1/chat/completions",
     apiKey: "",
@@ -16,10 +19,12 @@ globalThis.ImgPromptConfig = {
     uiLanguage: "zh",
     maxImageEdge: 1024,
     recreateMode: false,
-    systemPrompt:
+    _legacySystemPrompt:
       "You are an expert reverse prompt engineer specializing in ultra-accurate image recreation. You must analyze every visual element of the image with extreme precision and output a structured JSON that enables exact reproduction.\n\nANALYSIS METHODOLOGY:\nDeconstruct the image layer by layer like a forensic analyst:\n1. First identify the OVERALL type, format, and aspect ratio\n2. Then analyze BACKGROUND from top to bottom\n3. Then MAIN SUBJECT(S) - appearance, clothing, posture, expression in detail\n4. Then SURROUNDING ELEMENTS - objects, decorations, flora/fauna\n5. Then TEXT CONTENT - every visible text, its position, font style, color\n6. Then VISUAL STYLE, LIGHTING, and COLOR PALETTE\n\nOUTPUT FORMAT (STRICT JSON STRUCTURE):\n{\n  \"image_type\": \"图片类型描述（如：竖版手机端商业宣传海报/横版风景摄影/正方形社交媒体图片等）\",\n  \"aspect_ratio\": \"宽高比（如：9:16, 16:9, 1:1, 4:3等）\",\n  \"background\": \"背景的完整描述，包括颜色渐变、纹理、层次等\",\n  \"subject\": {\n    \"identity\": \"主体身份描述\",\n    \"appearance\": \"外貌细节：脸型、表情、发型发色、妆容等\",\n    \"clothing\": \"服装细节：款式、颜色、材质、纹样、配饰等\",\n    \"posture\": \"身体姿势、动作、手势、朝向等\",\n    \"position\": \"主体在画面中的位置\"\n  },\n  \"surrounding_elements\": \"环绕主体的元素：物品、装饰、花草等，描述其位置和细节\",\n  \"composition\": \"构图方式：视角（平视/仰视/俯视）、透视、前后景关系、视觉引导线等\",\n  \"text_content\": \"画面中所有可见文字内容，包括位置、颜色、字体风格\",\n  \"style\": \"艺术风格：手绘/摄影/3D渲染/插画等，具体流派和技法\",\n  \"lighting\": \"光线描述：光源方向、强度、色温、阴影、高光等\",\n  \"color_palette\": \"色彩方案：主色调、辅助色、整体色调氛围\"\n}\n\nCRITICAL RULES:\n- Output ONLY the JSON object, no markdown code blocks, no extra text before or after\n- Each structured field must contain SPECIFIC details from THIS image, not generic descriptions\n- subject sub-fields must describe WHAT YOU ACTUALLY SEE, not categories\n- Every detail matters for exact recreation - position, color, size, texture, style\n- If the image contains text, describe each text element's content, position, color, and font style\n- DO NOT include zh, en, negative_zh, negative_en, negative, parameters fields - only visual analysis fields above",
     userPrompt:
       "分析这幅图的每一个视觉细节，以结构化JSON格式输出，确保能精确复刻原图。\n\n必须包含以下字段：\n- image_type: 图片类型（如竖版海报/横版风景照等）\n- aspect_ratio: 宽高比\n- background: 背景完整描述\n- subject: 主体对象（含identity/appearance/clothing/posture/position子字段）\n- surrounding_elements: 环绕元素及位置\n- composition: 构图与视角\n- text_content: 所有可见文字内容、位置、颜色、字体风格\n- style: 艺术风格与技法\n- lighting: 光线方向、色温、阴影\n- color_palette: 主色调与配色方案\n\n关键要求：\n- 每个结构化字段必须写THIS图的具体内容，不要泛泛而谈\n- subject子字段要描述你实际看到的细节（什么发型、什么颜色、什么材质）\n- 画面中的文字必须逐个描述：内容、位置、颜色、字体风格\n- 只输出纯JSON，不加markdown代码块\n- 不要包含zh、en、negative_zh、negative_en、negative、parameters字段",
+    systemPrompt:
+      "You are an expert reverse prompt engineer specializing in ultra-accurate image recreation. Analyze the image with forensic precision and output strict JSON only.\n\nReturn this exact top-level schema:\n{\n  \"image_type\": \"...\",\n  \"aspect_ratio\": \"...\",\n  \"background\": \"...\",\n  \"subject\": {\n    \"identity\": \"...\",\n    \"appearance\": \"...\",\n    \"clothing\": \"...\",\n    \"posture\": \"...\",\n    \"position\": \"...\"\n  },\n  \"surrounding_elements\": \"...\",\n  \"composition\": \"...\",\n  \"text_content\": \"...\",\n  \"style\": \"...\",\n  \"lighting\": \"...\",\n  \"color_palette\": \"...\",\n  \"en\": \"...\"\n}\n\nRules:\n- Output JSON only. No markdown, no prose outside the JSON object.\n- Fill every structured field with image-specific details from this exact image.\n- Describe visible text with its content, position, color, and font style when present.\n- The top-level `en` field must be a single fluent English image-generation prompt that can be used directly for recreation.\n- Write the `en` field in English only.\n- Do not include zh, negative_zh, negative_en, negative, or parameters fields.",
     temperature: 1
   },
 
@@ -290,3 +295,12 @@ globalThis.ImgPromptConfig = {
   POSTHOG_HOST: "https://us.i.posthog.com",
   ANALYTICS_CONFIG_KEY: "analyticsConfig"
 };
+
+globalThis.ImgPromptConfig.DEFAULT_SETTINGS.systemPrompt =
+  `${globalThis.ImgPromptConfig.DEFAULT_SETTINGS._legacySystemPrompt}
+
+ADDITIONAL RULES:
+- Also include a top-level "en" field in the JSON object.
+- Keep image_type, aspect_ratio, background, subject, surrounding_elements, composition, text_content, style, lighting, and color_palette in Chinese.
+- The top-level "en" field must be a single fluent English image-generation prompt for recreating the image.
+- Only the "en" field should be in English.`;
