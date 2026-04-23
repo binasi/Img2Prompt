@@ -50,7 +50,15 @@ presetChipsContainer.addEventListener("click", (e) => {
       // Scene preset: base + scene focus
       form.userPrompt.value = basePrompt + PRESETS[presetKey];
     }
-    updateActiveChip(form.userPrompt.value);
+    
+    // Directly highlight the clicked preset button
+    const allChips = document.querySelectorAll(".preset-chip");
+    allChips.forEach(chip => chip.classList.remove("active"));
+    chip.classList.add("active");
+    
+    // Hide custom mode view
+    showBuiltinMode();
+    
     handleAutoSave();
     return;
   }
@@ -59,7 +67,15 @@ presetChipsContainer.addEventListener("click", (e) => {
     const customId = presetKey;
     if (customTemplates[customId]) {
       form.userPrompt.value = customTemplates[customId].prompt;
-      updateActiveChip(customTemplates[customId].prompt);
+      
+      // Directly highlight the clicked custom preset button
+      const allChips = document.querySelectorAll(".preset-chip");
+      allChips.forEach(chip => chip.classList.remove("active"));
+      chip.classList.add("active");
+      
+      // Show custom edit mode
+      showCustomEditMode(customId);
+      
       handleAutoSave();
     }
   }
@@ -100,7 +116,7 @@ function enterCreateCustomMode() {
   customTitleInput.placeholder = lang === 'zh' ? '基于通用预设的自定义提示词...' : 'Custom prompt based on General preset...';
 }
 
-function updateActiveChip(currentPrompt) {
+function updateActiveChip(currentPrompt, isFromPresetClick = false) {
   const allChips = document.querySelectorAll(".preset-chip");
   allChips.forEach(chip => chip.classList.remove("active"));
   
@@ -125,8 +141,12 @@ function updateActiveChip(currentPrompt) {
     return;
   }
 
-  if (!found) {
+  // Only enter create mode if explicitly requested (e.g., from +add button)
+  // Don't auto-enter create mode when clicking presets
+  if (!found && !isFromPresetClick) {
     showCustomCreateMode();
+  } else if (!found && isFromPresetClick) {
+    showBuiltinMode();
   }
 }
 
@@ -593,7 +613,62 @@ function fillForm(settings) {
   form.model.value = settings.model || "";
 
   form.userPrompt.value = settings.userPrompt || "";
-  updateActiveChip(form.userPrompt.value);
+  
+  // Try to match and highlight the corresponding preset button
+  const basePrompt = ImgPromptConfig.BASE_USER_PROMPT;
+  let matched = false;
+  
+  // Check if it matches any custom template
+  for (const [id, tpl] of Object.entries(customTemplates)) {
+    if (tpl.prompt === form.userPrompt.value) {
+      const allChips = document.querySelectorAll(".preset-chip");
+      allChips.forEach(chip => chip.classList.remove("active"));
+      const customChip = document.querySelector(`.preset-chip[data-preset="${id}"]`);
+      if (customChip) {
+        customChip.classList.add("active");
+        showCustomEditMode(id);
+      }
+      matched = true;
+      break;
+    }
+  }
+  
+  // Check if it matches any built-in preset
+  if (!matched && PRESETS) {
+    for (const [key, text] of Object.entries(PRESETS)) {
+      // For general: exact match with base prompt
+      if (key === "general" && form.userPrompt.value === basePrompt) {
+        const allChips = document.querySelectorAll(".preset-chip");
+        allChips.forEach(chip => chip.classList.remove("active"));
+        const generalChip = document.querySelector('.preset-chip[data-preset="general"]');
+        if (generalChip) generalChip.classList.add("active");
+        showBuiltinMode();
+        matched = true;
+        break;
+      }
+      // For scene presets: match base + scene
+      if (key !== "general" && form.userPrompt.value === basePrompt + text) {
+        const allChips = document.querySelectorAll(".preset-chip");
+        allChips.forEach(chip => chip.classList.remove("active"));
+        const sceneChip = document.querySelector(`.preset-chip[data-preset="${key}"]`);
+        if (sceneChip) sceneChip.classList.add("active");
+        showBuiltinMode();
+        matched = true;
+        break;
+      }
+    }
+  }
+  
+  // If no match found, default to general
+  if (!matched) {
+    form.userPrompt.value = basePrompt;
+    const allChips = document.querySelectorAll(".preset-chip");
+    allChips.forEach(chip => chip.classList.remove("active"));
+    const generalChip = document.querySelector('.preset-chip[data-preset="general"]');
+    if (generalChip) generalChip.classList.add("active");
+    showBuiltinMode();
+  }
+  
   form.hoverButtonEnabled.checked = settings.hoverButtonEnabled !== false;
   form.snippingShortcutEnabled.checked = settings.snippingShortcutEnabled !== false;
   form.uiLanguage.value = settings.uiLanguage || "zh";

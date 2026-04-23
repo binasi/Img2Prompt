@@ -36,7 +36,7 @@ const COMPRESSED_IMAGE_QUALITY = 0.86;
 let lastContextImage = null;
 let activeRequestId = "";
 let activeLanguage = "zh";
-let currentPrompts = { image_type: "", aspect_ratio: "", background: "", subject: null, surrounding_elements: "", composition: "", text_content: "", style: "", lighting: "", color_palette: "", negative: null, parameters: null };
+let currentPrompts = { zh: "", en: "" };
 let currentSource = { srcUrl: "", imageDataUrl: "" };
 let currentTrigger = "unknown";
 let isGenerating = false;
@@ -52,34 +52,6 @@ let generationStartedAt = 0;
 let progressTimerId = 0;
 let currentProgressText = "";
 let panelDismissed = false;
-let isJsonMode = false;
-
-// Convert structured prompt fields to readable text for normal mode display
-function buildReadableText(prompts) {
-  if (!prompts) return "";
-  const dict = UI_STRINGS[activeLanguage] || UI_STRINGS.zh;
-  const parts = [];
-  if (prompts.image_type) parts.push(prompts.image_type);
-  if (prompts.aspect_ratio) parts.push(dict.labelAspectRatio + ": " + prompts.aspect_ratio);
-  if (prompts.background) parts.push(dict.labelBackground + ": " + prompts.background);
-  if (prompts.subject) {
-    const s = prompts.subject;
-    const subParts = [];
-    if (s.identity) subParts.push(s.identity);
-    if (s.appearance) subParts.push(s.appearance);
-    if (s.clothing) subParts.push(s.clothing);
-    if (s.posture) subParts.push(s.posture);
-    if (s.position) subParts.push(s.position);
-    if (subParts.length) parts.push(dict.labelSubject + ": " + subParts.join(", "));
-  }
-  if (prompts.surrounding_elements) parts.push(dict.labelSurroundingElements + ": " + prompts.surrounding_elements);
-  if (prompts.composition) parts.push(dict.labelComposition + ": " + prompts.composition);
-  if (prompts.text_content) parts.push(dict.labelTextContent + ": " + prompts.text_content);
-  if (prompts.style) parts.push(dict.labelStyle + ": " + prompts.style);
-  if (prompts.lighting) parts.push(dict.labelLighting + ": " + prompts.lighting);
-  if (prompts.color_palette) parts.push(dict.labelColorPalette + ": " + prompts.color_palette);
-  return parts.join("\n");
-}
 
 function isExtensionContextError(error) {
   const message = error instanceof Error ? error.message : String(error || "");
@@ -242,9 +214,6 @@ chrome.runtime.onMessage.addListener((message) => {
     case "prompt:start-analysis":
       handleStartAnalysis(message);
       break;
-    case "prompt:load-history-item":
-      handleLoadHistoryItem(message);
-      break;
     case "prompt:progress":
       if (message.requestId === activeRequestId) {
         updateProgress(message.progress, message.text);
@@ -282,14 +251,23 @@ async function handleStartAnalysis(message) {
     srcUrl: message.srcUrl || "",
     imageDataUrl: message.imageDataUrl || ""
   };
-  currentPrompts = { image_type: "", aspect_ratio: "", background: "", subject: null, surrounding_elements: "", composition: "", text_content: "", style: "", lighting: "", color_palette: "", negative: null, parameters: null };
+  currentPrompts = { zh: "", en: "" };
 
   const panel = ensurePanel();
   const dict = UI_STRINGS[uiLanguage] || UI_STRINGS.zh;
 
   activeLanguage = preferredPromptLanguage || uiLanguage || "zh";
-  // Button order is fixed by HTML structure: 中文 → English → JSON
-  // No need to dynamically change CSS order
+  const zhBtn = panel.querySelector('[data-lang="zh"]');
+  const enBtn = panel.querySelector('[data-lang="en"]');
+  if (zhBtn && enBtn) {
+    if (activeLanguage === "en") {
+      zhBtn.style.order = "1";
+      enBtn.style.order = "0";
+    } else {
+      zhBtn.style.order = "0";
+      enBtn.style.order = "1";
+    }
+  }
 
   setPreview(panel, message.imageDataUrl || message.srcUrl || "");
   setTextareaValue(panel, "");
@@ -370,21 +348,9 @@ function handleResult(message) {
     return;
   }
 
-  // Parse structured prompt data - only visual analysis fields
-  const prompts = message.prompts || {};
   currentPrompts = {
-    image_type: prompts.image_type || "",
-    aspect_ratio: prompts.aspect_ratio || "",
-    background: prompts.background || "",
-    subject: prompts.subject || null,
-    surrounding_elements: prompts.surrounding_elements || "",
-    composition: prompts.composition || "",
-    text_content: prompts.text_content || "",
-    style: prompts.style || "",
-    lighting: prompts.lighting || "",
-    color_palette: prompts.color_palette || "",
-    negative: prompts.negative || null,
-    parameters: prompts.parameters || null
+    zh: message.prompts?.zh || "",
+    en: message.prompts?.en || ""
   };
   currentSource = message.source || currentSource;
 
@@ -396,68 +362,11 @@ function handleResult(message) {
   updateProgress(100, dict.generationComplete);
   setStatus(panel, dict.completed);
   setError(panel, "");
-  setTextareaValue(panel, buildReadableText(currentPrompts));
+  setTextareaValue(panel, currentPrompts[activeLanguage] || "");
   resetCopyButton(panel);
   setScannerVisibility(panel, false);
   setContentVisibility(panel, true);
   setStopButtonState(panel, false);
-  if (currentSource.imageDataUrl || currentSource.srcUrl) {
-    setPreview(panel, currentSource.imageDataUrl || currentSource.srcUrl);
-  }
-}
-
-function handleLoadHistoryItem(message) {
-  const historyData = message.data;
-  if (!historyData?.prompts) {
-    return;
-  }
-
-  panelDismissed = false;
-  const prompts = historyData.prompts || {};
-  currentPrompts = {
-    image_type: prompts.image_type || "",
-    aspect_ratio: prompts.aspect_ratio || "",
-    background: prompts.background || "",
-    subject: prompts.subject || null,
-    surrounding_elements: prompts.surrounding_elements || "",
-    composition: prompts.composition || "",
-    text_content: prompts.text_content || "",
-    style: prompts.style || "",
-    lighting: prompts.lighting || "",
-    color_palette: prompts.color_palette || "",
-    negative: prompts.negative || null,
-    parameters: prompts.parameters || null
-  };
-  currentSource = {
-    srcUrl: historyData.srcUrl || "",
-    imageDataUrl: historyData.imageDataUrl || ""
-  };
-  currentTrigger = "history";
-
-  const panel = ensurePanel();
-  const dict = UI_STRINGS[uiLanguage] || UI_STRINGS.zh;
-  
-  // Reset state
-  isGenerating = false;
-  stopProgressTimer();
-  
-  // Set language preference
-  activeLanguage = preferredPromptLanguage || uiLanguage || "zh";
-  // Button order is fixed by HTML structure: 中文 → English → JSON
-  // No need to dynamically change CSS order
-  
-  // Display the content
-  setLoadingState(panel, false);
-  updateProgress(100, dict.generationComplete);
-  setStatus(panel, dict.completed);
-  setError(panel, "");
-  setTextareaValue(panel, buildReadableText(currentPrompts));
-  resetCopyButton(panel);
-  setScannerVisibility(panel, false);
-  setContentVisibility(panel, true);
-  setStopButtonState(panel, false);
-  
-  // Set preview image
   if (currentSource.imageDataUrl || currentSource.srcUrl) {
     setPreview(panel, currentSource.imageDataUrl || currentSource.srcUrl);
   }
@@ -1070,7 +979,7 @@ function buildPanelMarkup() {
         border-radius: 22px;
         background: rgba(255, 255, 255, 0.04);
         color: #f8fafc;
-        padding: 14px 12px 18px 18px;
+        padding: 15px 16px;
         box-sizing: border-box;
         font-size: 13px;
         line-height: 1.6;
@@ -1079,46 +988,12 @@ function buildPanelMarkup() {
         scrollbar-width: thin;
         scrollbar-color: rgba(148, 163, 184, 0.55) rgba(255, 255, 255, 0.06);
       }
-      .ipi-textarea::-webkit-resizer {
-        background: transparent;
-        border: none;
-      }
-      .ipi-sheet {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        position: relative;
-      }
-      .ipi-textarea-wrapper {
-        position: relative;
-        border-radius: 22px;
-        overflow: hidden;
-      }
-      .ipi-resize-handle {
-        position: absolute;
-        bottom: -24px;
-        right: 10px;
-        width: 18px;
-        height: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: rgba(148, 163, 184, 0.35);
-        cursor: ns-resize;
-        pointer-events: auto;
-        transition: color 160ms ease;
-        z-index: 2;
-      }
-      .ipi-resize-handle:hover {
-        color: rgba(148, 163, 184, 0.7);
-      }
       .ipi-textarea::-webkit-scrollbar {
         width: 6px;
       }
       .ipi-textarea::-webkit-scrollbar-track {
         background: rgba(255, 255, 255, 0.04);
         border-radius: 999px;
-        margin: 4px 0;
       }
       .ipi-textarea::-webkit-scrollbar-thumb {
         background: rgba(148, 163, 184, 0.5);
@@ -1161,7 +1036,7 @@ function buildPanelMarkup() {
         margin-top: 4px;
       }
       .ipi-action {
-        min-width: 80px;
+        min-width: 112px;
         color: #111014;
         background: linear-gradient(90deg, #8bd3ff, #ffc85f 55%, #f09cc0);
         box-shadow: 0 14px 30px rgba(255, 193, 94, 0.18);
@@ -1174,11 +1049,8 @@ function buildPanelMarkup() {
       .ipi-error {
         color: #f8b4c8;
         font-size: 12px;
+        min-height: 16px;
         padding-left: 2px;
-        display: none;
-      }
-      .ipi-error[data-visible="true"] {
-        display: block;
       }
     </style>
     <section class="ipi-panel" hidden>
@@ -1209,19 +1081,11 @@ function buildPanelMarkup() {
             </div>
             <div class="ipi-error"></div>
             <div class="ipi-sheet" data-visible="false">
-              <div class="ipi-textarea-wrapper">
-                <textarea class="ipi-textarea" spellcheck="false" placeholder="${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).placeholder}"></textarea>
-              </div>
-              <div class="ipi-resize-handle" title="拖动调整大小">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M2 10L10 2M5 10L10 5M8 10L10 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-              </div>
+              <textarea class="ipi-textarea" spellcheck="false" placeholder="${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).placeholder}"></textarea>
               <div class="ipi-actions">
                 <div class="ipi-switches">
                   <button class="ipi-switch" type="button" data-lang="zh" data-active="true">${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).zhBtn}</button>
                   <button class="ipi-switch" type="button" data-lang="en" data-active="false">${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).enBtn}</button>
-                  <button class="ipi-switch" type="button" data-action="toggle-json" data-active="false">JSON</button>
                 </div>
                 <button class="ipi-action" type="button" data-action="copy" data-state="idle">${(UI_STRINGS[uiLanguage] || UI_STRINGS.zh).copyBtn}</button>
               </div>
@@ -1370,58 +1234,15 @@ function bindPanelEvents(shadowRoot) {
     startDragging(event);
   });
 
-  // Custom resize handle
-  const resizeHandle = shadowRoot.querySelector(".ipi-resize-handle");
-  const textarea = shadowRoot.querySelector(".ipi-textarea");
-  if (resizeHandle && textarea) {
-    let isResizing = false;
-    let startY = 0;
-    let startHeight = 0;
-
-    resizeHandle.addEventListener("pointerdown", (event) => {
-      isResizing = true;
-      startY = event.clientY;
-      startHeight = textarea.offsetHeight;
-      textarea.style.userSelect = "none";
-      event.preventDefault();
-      event.stopPropagation();
-    });
-
-    window.addEventListener("pointermove", (event) => {
-      if (!isResizing) return;
-      const deltaY = event.clientY - startY;
-      const newHeight = Math.max(176, startHeight + deltaY);
-      textarea.style.height = newHeight + "px";
-    });
-
-    window.addEventListener("pointerup", () => {
-      if (isResizing) {
-        isResizing = false;
-        textarea.style.userSelect = "";
-      }
-    });
-  }
-
-  // Handle language switch buttons (zh/en)
-  shadowRoot.querySelectorAll('.ipi-switch[data-lang]').forEach((button) => {
+  shadowRoot.querySelectorAll(".ipi-switch").forEach((button) => {
     button.addEventListener("click", () => {
-      const lang = button.getAttribute("data-lang");
+      activeLanguage = button.getAttribute("data-lang") || "zh";
       
-      // Switch to language mode, disable JSON mode
-      if (isJsonMode) {
-        isJsonMode = false;
-      }
-      
-      activeLanguage = lang;
-      preferredPromptLanguage = lang;
-      chrome.storage.local.set({ preferredPromptLanguage: lang });
-      
-      // Sync all button states
+      preferredPromptLanguage = activeLanguage;
+      chrome.storage.local.set({ preferredPromptLanguage: activeLanguage });
+
       syncLanguageButtons(shadowRoot);
-      
-      // Update textarea to show current language with proper labels
-      setTextareaValue(shadowRoot, buildReadableText(currentPrompts));
-      
+      setTextareaValue(shadowRoot, currentPrompts[activeLanguage] || "");
       trackEvent("prompt_language_switched", {
         language: activeLanguage,
         trigger: currentTrigger,
@@ -1430,71 +1251,14 @@ function bindPanelEvents(shadowRoot) {
       });
     });
   });
-  
-  // Handle JSON toggle button
-  const jsonBtn = shadowRoot.querySelector('.ipi-switch[data-action="toggle-json"]');
-  if (jsonBtn) {
-    jsonBtn.addEventListener("click", () => {
-      // JSON button is a one-way toggle: if not in JSON mode, switch to it
-      // Once in JSON mode, clicking JSON button does nothing (must use language buttons to exit)
-      if (!isJsonMode) {
-        isJsonMode = true;
-        
-        // Sync all button states (this will update JSON button and language buttons)
-        syncLanguageButtons(shadowRoot);
-        
-        // Update textarea display
-        setTextareaValue(shadowRoot, "");
-      }
-      // If already in JSON mode, do nothing (stay in JSON mode)
-    });
-  }
 
   shadowRoot.querySelector(".ipi-textarea")?.addEventListener("input", (event) => {
-    // In JSON mode, try to parse and update structured fields
-    // In normal mode, we don't update structured fields from plain text
-    if (isJsonMode) {
-      try {
-        const parsed = JSON.parse(event.target.value);
-        if (parsed.image_type !== undefined) currentPrompts.image_type = parsed.image_type;
-        if (parsed.aspect_ratio !== undefined) currentPrompts.aspect_ratio = parsed.aspect_ratio;
-        if (parsed.background !== undefined) currentPrompts.background = parsed.background;
-        if (parsed.subject !== undefined) currentPrompts.subject = parsed.subject;
-        if (parsed.surrounding_elements !== undefined) currentPrompts.surrounding_elements = parsed.surrounding_elements;
-        if (parsed.composition !== undefined) currentPrompts.composition = parsed.composition;
-        if (parsed.text_content !== undefined) currentPrompts.text_content = parsed.text_content;
-        if (parsed.style !== undefined) currentPrompts.style = parsed.style;
-        if (parsed.lighting !== undefined) currentPrompts.lighting = parsed.lighting;
-        if (parsed.color_palette !== undefined) currentPrompts.color_palette = parsed.color_palette;
-        if (parsed.negative !== undefined) currentPrompts.negative = parsed.negative;
-        if (parsed.parameters !== undefined) currentPrompts.parameters = parsed.parameters;
-      } catch (e) {
-        // Invalid JSON, ignore
-      }
-    }
+    const value = event.target.value;
+    currentPrompts[activeLanguage] = value;
   });
 
   shadowRoot.querySelector('[data-action="copy"]')?.addEventListener("click", async () => {
-    let text;
-    if (isJsonMode && currentPrompts) {
-      // Build full structured JSON for copy
-      const jsonData = {};
-      if (currentPrompts.image_type) jsonData.image_type = currentPrompts.image_type;
-      if (currentPrompts.aspect_ratio) jsonData.aspect_ratio = currentPrompts.aspect_ratio;
-      if (currentPrompts.background) jsonData.background = currentPrompts.background;
-      if (currentPrompts.subject) jsonData.subject = currentPrompts.subject;
-      if (currentPrompts.surrounding_elements) jsonData.surrounding_elements = currentPrompts.surrounding_elements;
-      if (currentPrompts.composition) jsonData.composition = currentPrompts.composition;
-      if (currentPrompts.text_content) jsonData.text_content = currentPrompts.text_content;
-      if (currentPrompts.style) jsonData.style = currentPrompts.style;
-      if (currentPrompts.lighting) jsonData.lighting = currentPrompts.lighting;
-      if (currentPrompts.color_palette) jsonData.color_palette = currentPrompts.color_palette;
-      if (currentPrompts.negative) jsonData.negative = currentPrompts.negative;
-      if (currentPrompts.parameters) jsonData.parameters = currentPrompts.parameters;
-      text = JSON.stringify(jsonData, null, 2);
-    } else {
-      text = buildReadableText(currentPrompts);
-    }
+    const text = currentPrompts[activeLanguage] || "";
     if (!text) {
       return;
     }
@@ -1541,17 +1305,10 @@ async function cancelActiveGeneration(shadowRoot) {
 
 function syncLanguageButtons(shadowRoot) {
   shadowRoot.querySelectorAll(".ipi-switch").forEach((button) => {
-    // Handle language buttons
-    if (button.hasAttribute("data-lang")) {
-      button.setAttribute(
-        "data-active",
-        String(button.getAttribute("data-lang") === activeLanguage && !isJsonMode)
-      );
-    }
-    // Handle JSON button
-    if (button.getAttribute("data-action") === "toggle-json") {
-      button.setAttribute("data-active", String(isJsonMode));
-    }
+    button.setAttribute(
+      "data-active",
+      String(button.getAttribute("data-lang") === activeLanguage)
+    );
   });
 }
 
@@ -1614,45 +1371,11 @@ function formatProgressText(text) {
 }
 
 function setError(shadowRoot, text) {
-  const errorEl = shadowRoot.querySelector(".ipi-error");
-  if (!errorEl) return;
-  
-  if (text) {
-    errorEl.textContent = text;
-    errorEl.setAttribute("data-visible", "true");
-  } else {
-    errorEl.textContent = "";
-    errorEl.removeAttribute("data-visible");
-  }
+  shadowRoot.querySelector(".ipi-error").textContent = text;
 }
 
 function setTextareaValue(shadowRoot, value) {
-  const textarea = shadowRoot.querySelector(".ipi-textarea");
-  if (!textarea) return;
-  
-  if (isJsonMode && currentPrompts) {
-    // Build complete structured JSON with all visual analysis fields
-    const jsonData = {};
-    // Structured visual analysis fields (in logical analysis order)
-    if (currentPrompts.image_type) jsonData.image_type = currentPrompts.image_type;
-    if (currentPrompts.aspect_ratio) jsonData.aspect_ratio = currentPrompts.aspect_ratio;
-    if (currentPrompts.background) jsonData.background = currentPrompts.background;
-    if (currentPrompts.subject) jsonData.subject = currentPrompts.subject;
-    if (currentPrompts.surrounding_elements) jsonData.surrounding_elements = currentPrompts.surrounding_elements;
-    if (currentPrompts.composition) jsonData.composition = currentPrompts.composition;
-    if (currentPrompts.text_content) jsonData.text_content = currentPrompts.text_content;
-    if (currentPrompts.style) jsonData.style = currentPrompts.style;
-    if (currentPrompts.lighting) jsonData.lighting = currentPrompts.lighting;
-    if (currentPrompts.color_palette) jsonData.color_palette = currentPrompts.color_palette;
-    // Note: negative and parameters fields have been removed from JSON output
-    
-    if (Object.keys(jsonData).length > 0) {
-      textarea.value = JSON.stringify(jsonData, null, 2);
-      return;
-    }
-  }
-  
-  textarea.value = value || "";
+  shadowRoot.querySelector(".ipi-textarea").value = value;
 }
 
 function setPreview(shadowRoot, src) {

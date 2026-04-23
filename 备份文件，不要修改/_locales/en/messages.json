@@ -1,0 +1,10 @@
+{
+   "extDescription": {
+      "description": "Extension description",
+      "message": "Image to Prompt"
+   },
+   "extName": {
+      "description": "Extension name",
+      "message": "ImgPrompt - AI Image to Prompt"
+   }
+}

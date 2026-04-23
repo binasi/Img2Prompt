@@ -76,7 +76,17 @@ globalThis.ImgPromptConfig = {
       historyCopy: "复制",
       historyDelete: "删除",
       historyCopied: "已复制",
-      historyLoaded: "已复制到剪贴板 ✓"
+      historyLoaded: "已复制到剪贴板 ✓",
+      // Prompt field labels
+      labelAspectRatio: "宽高比",
+      labelBackground: "背景",
+      labelSubject: "主体",
+      labelSurroundingElements: "环绕元素",
+      labelComposition: "构图",
+      labelTextContent: "文字",
+      labelStyle: "风格",
+      labelLighting: "光线",
+      labelColorPalette: "色彩"
     },
     en: {
       preparing: "Preparing",
@@ -116,7 +126,17 @@ globalThis.ImgPromptConfig = {
       historyCopy: "Copy",
       historyDelete: "Delete",
       historyCopied: "Copied",
-      historyLoaded: "Copied to clipboard ✓"
+      historyLoaded: "Copied to clipboard ✓",
+      // Prompt field labels
+      labelAspectRatio: "Aspect Ratio",
+      labelBackground: "Background",
+      labelSubject: "Subject",
+      labelSurroundingElements: "Surrounding Elements",
+      labelComposition: "Composition",
+      labelTextContent: "Text",
+      labelStyle: "Style",
+      labelLighting: "Lighting",
+      labelColorPalette: "Color Palette"
     }
   },
 

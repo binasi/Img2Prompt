@@ -15,9 +15,10 @@
 ## 更新摘要
 **所做更改**
 - 重构系统提示和用户提示，强制要求严格的JSON结构
-- 新增负向提示词字段 (`negative_zh` 和 `negative_en`)
+- 新增负向提示词字段 (`negative`)
 - 新增参数对象定义 (`parameters`) 包含技术参数
 - 增强配置验证机制，确保严格的JSON结构验证
+- 新增高还原度模式配置项 (`recreateMode`)
 - 更新配置项组织结构以反映新增的严格JSON要求
 - 完善配置验证机制和动态更新策略的说明
 
@@ -121,10 +122,23 @@ Config --> Manifest
 
 ```json
 {
-  "zh": "完整的中文提示词",
-  "en": "Complete English prompt",
-  "negative_zh": "中文负面提示词",
-  "negative_en": "English negative prompt",
+  "image_type": "图片类型描述",
+  "aspect_ratio": "宽高比",
+  "background": "背景完整描述",
+  "subject": {
+    "identity": "主体身份描述",
+    "appearance": "外貌细节",
+    "clothing": "服装细节",
+    "posture": "身体姿势",
+    "position": "主体在画面中的位置"
+  },
+  "surrounding_elements": "环绕主体的元素",
+  "composition": "构图方式",
+  "text_content": "画面中所有可见文字内容",
+  "style": "艺术风格",
+  "lighting": "光线描述",
+  "color_palette": "色彩方案",
+  "negative": "负向提示词",
   "parameters": {
     "steps": 30,
     "sampler": "DPM++ 2M Karras",
@@ -227,6 +241,7 @@ subgraph "配置验证层"
 StrictJSON[严格JSON验证]
 NegativePrompt[负向提示词验证]
 Parameters[参数对象验证]
+RecreateMode[高还原度模式验证]
 end
 subgraph "配置更新层"
 AutoSave[自动保存机制]
@@ -248,7 +263,7 @@ Access --> Content
 Access --> Panel
 StrictJSON --> NegativePrompt
 StrictJSON --> Parameters
-StrictJSON --> Storage
+StrictJSON --> RecreateMode
 ChangeListener --> Broadcast
 Broadcast --> Content
 Broadcast --> Panel
@@ -708,6 +723,7 @@ Fallback --> Complete
 5. **专业模板兼容**：新版本的专业模板与旧版本配置兼容
 6. **JSON结构兼容**：支持从宽松格式迁移到严格JSON格式
 7. **负向提示词兼容**：自动补全缺失的负向提示词字段
+8. **参数对象兼容**：自动补全缺失的技术参数
 
 **更新** 高还原度模式和专业模板的引入确保了向后兼容性，严格的JSON结构验证机制也保证了配置的完整性。
 
