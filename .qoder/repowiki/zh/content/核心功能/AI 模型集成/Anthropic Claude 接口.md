@@ -5,8 +5,16 @@
 - [background.js](file://background.js)
 - [config.js](file://config.js)
 - [options.js](file://options.js)
+- [options.html](file://options.html)
 - [content.js](file://content.js)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增高保真重建模式的动态令牌调整机制
+- 更新 Anthropic Claude 请求参数配置
+- 增强系统提示词和用户提示词的组合逻辑
+- 完善高保真模式下的配置界面支持
 
 ## 目录
 1. [简介](#简介)
@@ -14,16 +22,17 @@
 3. [核心组件](#核心组件)
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能考虑](#性能考虑)
-8. [故障排除指南](#故障排除指南)
-9. [结论](#结论)
+6. [高保真重建模式](#高保真重建模式)
+7. [依赖关系分析](#依赖关系分析)
+8. [性能考虑](#性能考虑)
+9. [故障排除指南](#故障排除指南)
+10. [结论](#结论)
 
 ## 简介
 
 Img2Prompt 是一个 Chrome 扩展程序，能够将图片转换为高质量的提示词。该扩展支持多种 AI 模型服务，包括 Anthropic Claude。本文档专注于 Anthropic Claude 接口的实现细节，深入解释 `requestViaAnthropic` 函数的工作机制，包括端点规范化、图像数据转换和请求格式适配。
 
-该扩展通过统一的接口支持多种模型提供商，其中 Anthropic Claude 作为主要的多模态模型之一，能够理解文本和图像输入，生成详细的图片描述和提示词。
+该扩展通过统一的接口支持多种模型提供商，其中 Anthropic Claude 作为主要的多模态模型之一，能够理解文本和图像输入，生成详细的图片描述和提示词。最新的更新集成了高保真重建模式，为需要精确图像重建的应用场景提供了增强的功能。
 
 ## 项目结构
 
@@ -36,23 +45,30 @@ A[background.js] --> B[请求处理核心]
 C[content.js] --> D[用户界面]
 E[config.js] --> F[配置管理]
 G[options.js] --> H[设置界面]
+I[options.html] --> J[配置界面模板]
 end
 subgraph "核心功能模块"
-B --> I[Anthropic Claude 支持]
-B --> J[OpenAI 兼容支持]
-B --> K[图像处理]
-D --> L[进度反馈]
-D --> M[结果展示]
+B --> K[Anthropic Claude 支持]
+B --> L[OpenAI 兼容支持]
+B --> M[图像处理]
+D --> N[进度反馈]
+D --> O[结果展示]
+end
+subgraph "高保真模式"
+F --> P[RECREATE_MODE_SYSTEM_OVERLAY]
+F --> Q[RECREATE_MODE_USER_OVERLAY]
+H --> R[recreateMode 配置]
+J --> S[高还原度模式开关]
 end
 ```
 
 **图表来源**
-- [background.js:1-945](file://background.js#L1-L945)
+- [background.js:1-1180](file://background.js#L1-L1180)
 - [content.js:1-1578](file://content.js#L1-L1578)
 
 **章节来源**
-- [background.js:1-945](file://background.js#L1-L945)
-- [config.js:1-253](file://config.js#L1-L253)
+- [background.js:1-1180](file://background.js#L1-L1180)
+- [config.js:1-321](file://config.js#L1-L321)
 
 ## 核心组件
 
@@ -80,10 +96,10 @@ I --> J
 
 ### Anthropic Claude 请求处理器
 
-`requestViaAnthropic` 函数是 Anthropic Claude 接口的核心实现，负责处理完整的请求流程：
+`requestViaAnthropic` 函数是 Anthropic Claude 接口的核心实现，负责处理完整的请求流程。该函数现已集成了高保真重建模式的动态令牌调整机制：
 
 **章节来源**
-- [background.js:594-666](file://background.js#L594-L666)
+- [background.js:769-841](file://background.js#L769-L841)
 
 ## 架构概览
 
@@ -94,30 +110,37 @@ graph TB
 subgraph "用户界面层"
 A[content.js 用户界面]
 B[options.js 设置界面]
+C[options.html 配置界面]
 end
 subgraph "业务逻辑层"
-C[background.js 主控制器]
-D[请求格式解析]
-E[图像处理]
+D[background.js 主控制器]
+E[请求格式解析]
+F[图像处理]
+G[高保真模式处理]
 end
 subgraph "外部集成层"
-F[Anthropic Claude API]
-G[OpenAI 兼容 API]
-H[其他模型提供商]
+H[Anthropic Claude API]
+I[OpenAI 兼容 API]
+J[其他模型提供商]
 end
 subgraph "配置管理层"
-I[config.js 配置]
-J[DEFAULT_SETTINGS 默认设置]
+K[config.js 配置]
+L[DEFAULT_SETTINGS 默认设置]
+M[RECREATE_MODE_* 高保真配置]
 end
-A --> C
-B --> C
+A --> D
+B --> D
 C --> D
-C --> E
+D --> E
 D --> F
 D --> G
-D --> H
-I --> J
-J --> C
+E --> H
+E --> I
+E --> J
+K --> L
+K --> M
+L --> D
+M --> G
 ```
 
 **图表来源**
@@ -128,7 +151,7 @@ J --> C
 
 ### requestViaAnthropic 函数详解
 
-`requestViaAnthropic` 函数实现了 Anthropic Claude API 的完整请求流程：
+`requestViaAnthropic` 函数实现了 Anthropic Claude API 的完整请求流程，现已集成了高保真重建模式的动态令牌调整机制：
 
 #### 函数签名和参数
 - **函数名**: `requestViaAnthropic`
@@ -143,12 +166,15 @@ participant Client as 客户端
 participant Handler as requestViaAnthropic
 participant Endpoint as 端点规范化
 participant Image as 图像转换
+participant Token as 令牌调整
 participant API as Claude API
 Client->>Handler : 调用函数
 Handler->>Endpoint : normalizeAnthropicEndpoint()
 Endpoint-->>Handler : 规范化后的端点
 Handler->>Image : toAnthropicImageSource()
 Image-->>Handler : 图像源对象
+Handler->>Token : 检查 recreateMode
+Token-->>Handler : 动态调整 max_tokens
 Handler->>API : 发送请求
 API-->>Handler : 返回响应
 Handler->>Handler : 解析响应内容
@@ -156,17 +182,20 @@ Handler-->>Client : 返回提示词
 ```
 
 **图表来源**
-- [background.js:594-666](file://background.js#L594-L666)
+- [background.js:769-841](file://background.js#L769-L841)
 
 #### 关键处理步骤
 
 1. **端点规范化**: 使用 `normalizeAnthropicEndpoint` 确保使用正确的 API 端点
 2. **图像数据转换**: 通过 `toAnthropicImageSource` 将图片数据转换为 Claude 所需格式
-3. **请求构建**: 组合系统提示词、用户提示词和图像数据
-4. **响应处理**: 解析 Claude API 的响应格式
+3. **令牌动态调整**: 根据 `recreateMode` 设置动态调整 `max_tokens` 从 1400 到 2600
+4. **请求构建**: 组合系统提示词、用户提示词和图像数据
+5. **响应处理**: 解析 Claude API 的响应格式
+
+**更新** 新增了高保真重建模式的动态令牌调整机制，当启用高保真模式时自动增加最大令牌数以提供足够的上下文进行详细重建分析
 
 **章节来源**
-- [background.js:594-666](file://background.js#L594-L666)
+- [background.js:769-841](file://background.js#L769-L841)
 
 ### toAnthropicImageSource 函数分析
 
@@ -189,7 +218,7 @@ G --> H
 ```
 
 **图表来源**
-- [background.js:678-693](file://background.js#L678-L693)
+- [background.js:853-868](file://background.js#L853-L868)
 
 #### 数据结构说明
 
@@ -199,7 +228,7 @@ G --> H
 - `data`: 实际的 base64 编码数据
 
 **章节来源**
-- [background.js:678-693](file://background.js#L678-L693)
+- [background.js:853-868](file://background.js#L853-L868)
 
 ### normalizeAnthropicEndpoint 函数分析
 
@@ -220,7 +249,7 @@ F --> G
 ```
 
 **图表来源**
-- [background.js:668-676](file://background.js#L668-L676)
+- [background.js:843-851](file://background.js#L843-L851)
 
 #### 支持的端点格式
 
@@ -229,11 +258,11 @@ F --> G
 - **自定义格式**: 任何其他有效的 Anthropic API 端点
 
 **章节来源**
-- [background.js:668-676](file://background.js#L668-L676)
+- [background.js:843-851](file://background.js#L843-L851)
 
 ### Anthropic 特有请求参数
 
-扩展为 Anthropic Claude 实现了特定的请求参数配置：
+扩展为 Anthropic Claude 实现了特定的请求参数配置，现已集成了高保真重建模式的动态令牌调整：
 
 #### 必需参数
 
@@ -241,7 +270,7 @@ F --> G
 |--------|------|--------|------|
 | `model` | string | 从配置读取 | 指定使用的 Claude 模型 |
 | `system` | string | 从配置读取 | 系统提示词，定义模型行为 |
-| `max_tokens` | number | 1400 | 最大生成令牌数 |
+| `max_tokens` | number | 1400 或 2600 | 最大生成令牌数，支持动态调整 |
 | `temperature` | number | 1 | 生成随机性参数 |
 
 #### 可选参数
@@ -250,8 +279,10 @@ F --> G
 |--------|------|--------|------|
 | `anthropic-version` | string | "2023-06-01" | API 版本号 |
 
+**更新** `max_tokens` 现在支持动态调整：当启用高保真重建模式时从 1400 增加到 2600，为详细重建分析提供足够上下文
+
 **章节来源**
-- [background.js:612-632](file://background.js#L612-L632)
+- [background.js:787-790](file://background.js#L787-L790)
 - [config.js:10](file://config.js#L10)
 
 ### 请求格式组合
@@ -293,11 +324,11 @@ IMAGE_CONTENT ||--|| IMAGE_SOURCE : has
 ```
 
 **图表来源**
-- [background.js:612-632](file://background.js#L612-L632)
-- [background.js:678-693](file://background.js#L678-L693)
+- [background.js:787-807](file://background.js#L787-L807)
+- [background.js:853-868](file://background.js#L853-L868)
 
 **章节来源**
-- [background.js:612-632](file://background.js#L612-L632)
+- [background.js:787-807](file://background.js#L787-L807)
 
 ### 响应处理机制
 
@@ -323,10 +354,91 @@ J --> K
 ```
 
 **图表来源**
-- [background.js:655-666](file://background.js#L655-L666)
+- [background.js:831-841](file://background.js#L831-L841)
 
 **章节来源**
-- [background.js:655-666](file://background.js#L655-L666)
+- [background.js:831-841](file://background.js#L831-L841)
+
+## 高保真重建模式
+
+### 模式概述
+
+高保真重建模式是扩展的一个重要特性，专为需要精确图像重建的应用场景设计。当启用此模式时，系统会自动调整多个参数以提供更详细的分析和重建能力。
+
+### 动态令牌调整机制
+
+#### 令牌数量调整
+
+| 模式状态 | max_tokens 值 | 用途 |
+|----------|---------------|------|
+| 普通模式 | 1400 | 标准图像分析和提示词生成 |
+| 高保真模式 | 2600 | 详细重建分析和精确提示词生成 |
+
+#### 自动调整逻辑
+
+```mermaid
+flowchart TD
+A[检查 recreateMode 设置] --> B{recreateMode 是否启用?}
+B --> |是| C[设置 max_tokens = 2600]
+B --> |否| D[设置 max_tokens = 1400]
+C --> E[继续请求处理]
+D --> E
+E --> F[发送 API 请求]
+```
+
+**图表来源**
+- [background.js:789-790](file://background.js#L789-L790)
+
+### 高保真模式配置
+
+#### 系统提示词增强
+
+高保真模式通过 `RECREATE_MODE_SYSTEM_OVERLAY` 配置增强了系统提示词，要求模型提供更详细的重建分析：
+
+- **增强的重建约束**: 更严格的精确重建要求
+- **技术参数字段**: 自动生成负面提示词和参数字段
+- **详细分析要求**: 捕捉微小但重建关键的细节
+
+#### 用户提示词增强
+
+通过 `RECREATE_MODE_USER_OVERLAY` 配置增强了用户提示词，指导模型进行高保真重建：
+
+- **微纹理分析**: 纸张/织物纹理、笔触特征
+- **坐标和比例**: 近似坐标或相对区域、主体占用比例
+- **材质和光学属性**: 反射、透明度、噪点、高光衰减
+- **布局和构图**: 间距、边距、重叠、边缘软化
+
+### 配置界面支持
+
+#### 设置界面
+
+高保真模式在设置界面中通过一个独立的开关进行控制：
+
+```mermaid
+flowchart TD
+A[设置界面] --> B{高还原度模式开关}
+B --> |开启| C[启用 recreateMode]
+B --> |关闭| D[禁用 recreateMode]
+C --> E[动态令牌调整生效]
+D --> F[使用标准令牌数]
+```
+
+**图表来源**
+- [options.html:709-719](file://options.html#L709-L719)
+
+#### 默认设置
+
+高保真模式默认处于禁用状态，以确保普通用户的使用体验：
+
+- **默认值**: `recreateMode: false`
+- **用户体验**: 避免不必要的性能开销
+- **按需启用**: 仅在需要精确重建时启用
+
+**章节来源**
+- [config.js:32-33](file://config.js#L32-L33)
+- [config.js:181-183](file://config.js#L181-L183)
+- [config.js:231-233](file://config.js#L231-L233)
+- [options.html:709-719](file://options.html#L709-L719)
 
 ## 依赖关系分析
 
@@ -338,21 +450,30 @@ subgraph "核心依赖"
 A[background.js] --> B[config.js]
 A --> C[content.js]
 A --> D[options.js]
+A --> E[options.html]
 end
 subgraph "配置依赖"
-B --> E[DEFAULT_SETTINGS]
-B --> F[UI_STRINGS]
-B --> G[ERROR_CODES]
+B --> F[DEFAULT_SETTINGS]
+B --> G[UI_STRINGS]
+B --> H[ERROR_CODES]
+B --> I[RECREATE_MODE_*]
 end
 subgraph "运行时依赖"
-A --> H[Chrome Extension APIs]
-A --> I[Fetch API]
-A --> J[AbortController]
+A --> J[Chrome Extension APIs]
+A --> K[Fetch API]
+A --> L[AbortController]
 end
 subgraph "工具函数依赖"
-A --> K[normalizeAnthropicEndpoint]
-A --> L[toAnthropicImageSource]
-A --> M[normalizePromptResult]
+A --> M[normalizeAnthropicEndpoint]
+A --> N[toAnthropicImageSource]
+A --> O[normalizePromptResult]
+A --> P[buildSystemPrompt]
+A --> Q[buildUserPrompt]
+end
+subgraph "高保真模式依赖"
+B --> I
+D --> R[recreateMode 配置]
+E --> S[高还原度模式开关]
 end
 ```
 
@@ -388,6 +509,17 @@ end
 - **错误重试**: 对临时性错误提供重试机制
 - **缓存策略**: 避免重复下载相同资源
 
+### 高保真模式性能影响
+
+**更新** 高保真重建模式对性能的影响：
+
+- **令牌数增加**: 从 1400 增加到 2600，可能增加 API 费用和响应时间
+- **内存使用**: 需要更多内存处理更详细的分析结果
+- **网络带宽**: 增加的令牌数可能导致更大的请求和响应数据
+- **成本考量**: 高保真模式的 API 调用成本更高
+
+**建议**: 仅在需要精确图像重建时启用高保真模式，普通使用场景建议保持默认设置
+
 ## 故障排除指南
 
 ### 常见错误类型
@@ -417,20 +549,36 @@ end
 2. 检查 Anthropic 版本参数
 3. 确认模型名称正确
 
+### 高保真模式问题
+
+**问题**: 高保真模式下响应时间过长
+**原因**: 增加的令牌数导致更长的处理时间
+**解决方案**:
+1. 检查网络连接稳定性
+2. 确认 API 密钥有足够的配额
+3. 考虑降低图像分辨率
+4. 适当调整温度参数
+
 **章节来源**
-- [background.js:635-654](file://background.js#L635-L654)
+- [background.js:810-829](file://background.js#L810-L829)
 
 ## 结论
 
 Img2Prompt 的 Anthropic Claude 接口实现展现了良好的架构设计和工程实践。通过模块化的函数设计、清晰的错误处理机制和灵活的配置选项，该扩展能够稳定地支持多种模型提供商。
+
+最新的高保真重建模式更新进一步增强了扩展的能力，为需要精确图像重建的应用场景提供了专业的解决方案。动态令牌调整机制确保了在提供详细分析的同时保持系统的响应性。
 
 关键优势包括：
 - **统一接口设计**: 通过 `requestFormat` 自动选择合适的处理方式
 - **健壮的错误处理**: 提供详细的错误信息和用户友好的提示
 - **灵活的配置管理**: 支持多种配置选项和自定义设置
 - **高效的图像处理**: 在保证质量的同时优化传输效率
+- **智能的高保真模式**: 动态调整令牌数以平衡性能和精度
+- **用户友好的配置界面**: 直观的开关控制和详细的状态说明
 
 未来可以考虑的改进方向：
 - 添加更多的模型提供商支持
 - 实现更智能的错误重试机制
 - 增加更多的配置选项和自定义能力
+- 优化高保真模式的性能表现
+- 提供更详细的使用指南和最佳实践建议
