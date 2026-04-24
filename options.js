@@ -545,12 +545,35 @@ form.addEventListener("input", (e) => {
 form.addEventListener("change", handleAutoSave);
 
 // Export settings
+// 只导出三类核心设置：连接设置、提示词设置、使用体验设置
 document.getElementById("export-settings").addEventListener("click", async () => {
-  const settings = await chrome.storage.local.get(Object.keys(DEFAULT_SETTINGS));
+  const allSettings = await chrome.storage.local.get(Object.keys(DEFAULT_SETTINGS));
+  const customTemplatesData = await chrome.storage.local.get(["customTemplates"]);
+  
+  // 只导出需要的设置项，不包含内部字段和历史记录
   const exportData = {
     version: chrome.runtime.getManifest().version,
     exportDate: new Date().toISOString(),
-    settings
+    settings: {
+      // 1. 连接设置
+      apiEndpoint: allSettings.apiEndpoint || "",
+      apiKey: allSettings.apiKey || "",
+      model: allSettings.model || "",
+      
+      // 2. 提示词设置
+      systemPrompt: allSettings.systemPrompt || "",
+      userPrompt: allSettings.userPrompt || "",
+      
+      // 3. 使用体验设置
+      uiLanguage: allSettings.uiLanguage || "zh",
+      hoverButtonEnabled: allSettings.hoverButtonEnabled !== undefined ? allSettings.hoverButtonEnabled : true,
+      snippingShortcutEnabled: allSettings.snippingShortcutEnabled !== undefined ? allSettings.snippingShortcutEnabled : true,
+      recreateMode: allSettings.recreateMode !== undefined ? allSettings.recreateMode : false,
+      maxImageEdge: allSettings.maxImageEdge || 1024,
+      
+      // 自定义模板（属于提示词设置）
+      customTemplates: customTemplatesData.customTemplates || {}
+    }
   };
   
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -578,8 +601,28 @@ document.getElementById("import-file-input").addEventListener("change", async (e
     const data = JSON.parse(text);
     
     if (data.settings) {
-      await chrome.storage.local.set(data.settings);
-      fillForm({ ...DEFAULT_SETTINGS, ...data.settings });
+      const importSettings = { ...data.settings };
+      
+      // 分离 customTemplates 和其他设置
+      const importedCustomTemplates = importSettings.customTemplates;
+      delete importSettings.customTemplates;
+      
+      // 导入其他设置
+      await chrome.storage.local.set(importSettings);
+      
+      // 单独导入 customTemplates（如果存在）
+      if (importedCustomTemplates) {
+        await chrome.storage.local.set({ customTemplates: importedCustomTemplates });
+      }
+      
+      fillForm({ ...DEFAULT_SETTINGS, ...importSettings });
+      
+      // 重新加载自定义模板
+      if (importedCustomTemplates) {
+        customTemplates = importedCustomTemplates;
+        renderCustomChips();
+      }
+      
       setStatus("✅ 设置已导入");
       
       chrome.runtime.sendMessage({ type: "settings:updated" }).catch(() => {});

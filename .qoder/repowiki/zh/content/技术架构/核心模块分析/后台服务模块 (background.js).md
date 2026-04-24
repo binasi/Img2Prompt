@@ -12,11 +12,10 @@
 
 ## 更新摘要
 **变更内容**
-- 增强 normalizePromptResult 函数，新增对 negative_zh、negative_en 和 parameters 字段的支持
-- 实现完整的结构化提示数据处理，支持多语言正面提示词、负面提示词和参数对象
-- 优化提示词数据的标准化和归一化流程
-- 新增智能堆叠逻辑，支持场景预设的自动识别和组合
-- 增强英文提示词生成支持，通过 ENGLISH_PROMPT_REQUIREMENT 配置
+- 更新以反映background.js文件的完整功能实现，包括服务工作者架构、消息通信、AI模型调用、图片处理等核心功能
+- 修正文档描述与实际代码实现的一致性
+- 增强normalizePromptResult函数的结构化提示数据处理能力
+- 完善智能堆叠逻辑和英文提示词生成支持
 
 ## 目录
 1. [简介](#简介)
@@ -40,9 +39,9 @@
 - 异步请求管理、超时控制与错误处理机制
 - IndexedDB 历史存储系统与 PostHog 分析集成
 - 性能优化建议与最佳实践
-- **新增** 增强的结构化提示数据处理（normalizePromptResult 函数）
-- **新增** 智能堆叠逻辑（buildUserPrompt 函数）
-- **新增** 英文提示词生成支持
+- 增强的结构化提示数据处理（normalizePromptResult 函数）
+- 智能堆叠逻辑（buildUserPrompt 函数）
+- 英文提示词生成支持
 
 ## 项目结构
 该扩展采用 Manifest V3 服务工作者架构，核心文件如下：
@@ -120,11 +119,11 @@ CFG --> OPT
   - 将底层错误映射为统一错误码，结合 UI 文案输出用户友好信息
 - IndexedDB 历史记录与分析事件
   - IndexedDB 存储历史记录，支持查询、删除、清空；通过 PostHog 上报分析事件
-- **新增** 增强的结构化提示数据处理
+- 增强的结构化提示数据处理
   - normalizePromptResult 函数支持完整的结构化提示数据，包括 zh/en 正面提示词、negative_zh/negative_en 负面提示词、parameters 参数对象
-- **新增** 智能堆叠逻辑
+- 智能堆叠逻辑
   - buildUserPrompt 函数实现智能提示词堆叠，支持场景预设的自动识别和组合
-- **新增** 英文提示词生成支持
+- 英文提示词生成支持
   - 通过 ENGLISH_PROMPT_REQUIREMENT 配置确保英文提示词字段的生成
 
 **章节来源**
@@ -147,9 +146,9 @@ CFG --> OPT
 - 数据处理：图片获取与压缩、请求格式判定、模型调用、结果规范化
 - 通信协调：向内容脚本推送进度与结果，接收取消与设置更新
 - 存储与分析：IndexedDB 历史记录管理、PostHog 分析事件上报
-- **新增** 结构化提示数据处理：增强 normalizePromptResult 函数，支持完整的结构化提示数据格式
-- **新增** 智能堆叠逻辑：buildUserPrompt 函数实现智能提示词组合，提升生成质量
-- **新增** 英文提示词支持：通过 ENGLISH_PROMPT_REQUIREMENT 确保英文提示词生成
+- 结构化提示数据处理：增强 normalizePromptResult 函数，支持完整的结构化提示数据格式
+- 智能堆叠逻辑：buildUserPrompt 函数实现智能提示词组合，提升生成质量
+- 英文提示词支持：通过 ENGLISH_PROMPT_REQUIREMENT 确保英文提示词生成
 
 ```mermaid
 sequenceDiagram
@@ -271,7 +270,7 @@ ThrowACError --> End
 - [background.js:728-753](file://background.js#L728-L753)
 
 ### 增强的结构化提示数据处理（normalizePromptResult 函数）
-- **更新** 增强的数据处理机制
+- 增强的数据处理机制
   - 支持完整的结构化提示数据格式，包括 zh/en 正面提示词、negative_zh/negative_en 负面提示词、parameters 参数对象
   - 实现智能 JSON 解析和数据清洗，支持 Markdown 代码块和普通 JSON 格式
   - 提供完善的字段验证和默认值处理
@@ -307,16 +306,16 @@ BuildResult --> Return(["返回标准化提示词对象"])
 ```
 
 **图表来源**
-- [background.js:846-883](file://background.js#L846-L883)
-- [background.js:912-930](file://background.js#L912-L930)
+- [background.js:870-921](file://background.js#L870-L921)
+- [background.js:950-968](file://background.js#L950-L968)
 
 **章节来源**
-- [background.js:846-883](file://background.js#L846-L883)
-- [background.js:912-930](file://background.js#L912-L930)
+- [background.js:870-921](file://background.js#L870-L921)
+- [background.js:950-968](file://background.js#L950-L968)
 - [content.js:355-363](file://content.js#L355-L363)
 
 ### 智能提示词堆叠逻辑（buildUserPrompt 函数）
-- **新增** 智能堆叠机制
+- 智能堆叠机制
   - 基于 ImgPromptConfig.BASE_USER_PROMPT 和 ImgPromptConfig.USER_PROMPT_PRESETS 实现
   - 支持基础提示词与场景预设的智能组合
   - 自动检测用户选择的特定场景预设，避免重复添加通用场景
@@ -386,12 +385,11 @@ Compress["createImageBitmap -> OffscreenCanvas -> convertToBlob(JPEG) -> dataURL
 ```
 
 **图表来源**
-- [background.js:775-807](file://background.js#L775-L807)
-- [background.js:809-813](file://background.js#L809-L813)
-- [background.js:815-849](file://background.js#L815-L849)
+- [background.js:970-1002](file://background.js#L970-L1002)
+- [background.js:1010-1035](file://background.js#L1010-L1035)
 
 **章节来源**
-- [background.js:775-849](file://background.js#L775-L849)
+- [background.js:970-1035](file://background.js#L970-L1035)
 
 ### 异步请求管理、超时控制与错误处理
 - 请求管理
@@ -466,11 +464,11 @@ Compress["createImageBitmap -> OffscreenCanvas -> convertToBlob(JPEG) -> dataURL
   - 示例路径：[requestViaAnthropic:716-788](file://background.js#L716-L788)
 - fetchAndCompressImage
   - 作用：统一获取与压缩图片，返回 dataURL
-  - 示例路径：[fetchAndCompressImage:897-929](file://background.js#L897-L929)
-- **更新** normalizePromptResult
+  - 示例路径：[fetchAndCompressImage:970-1002](file://background.js#L970-L1002)
+- normalizePromptResult
   - 作用：增强的结构化提示数据处理，支持完整的多语言提示词和参数对象
-  - 示例路径：[normalizePromptResult:846-883](file://background.js#L846-L883)
-- **新增** buildUserPrompt
+  - 示例路径：[normalizePromptResult:870-921](file://background.js#L870-L921)
+- buildUserPrompt
   - 作用：实现智能提示词堆叠逻辑，替代简单字符串拼接
   - 示例路径：[buildUserPrompt:639-666](file://background.js#L639-L666)
 
@@ -479,23 +477,23 @@ Compress["createImageBitmap -> OffscreenCanvas -> convertToBlob(JPEG) -> dataURL
 - [background.js:600-625](file://background.js#L600-L625)
 - [background.js:639-714](file://background.js#L639-L714)
 - [background.js:716-788](file://background.js#L716-L788)
-- [background.js:897-929](file://background.js#L897-L929)
-- [background.js:846-883](file://background.js#L846-L883)
+- [background.js:970-1002](file://background.js#L970-L1002)
+- [background.js:870-921](file://background.js#L870-L921)
 - [background.js:639-666](file://background.js#L639-L666)
 
 ## 依赖关系分析
 - 配置依赖
   - config.js 提供默认设置、UI 文案、错误码、分析上报配置，被 background.js、content.js、options.js 共享
-  - **新增** config.js 中的 BASE_USER_PROMPT 和 USER_PROMPT_PRESETS 为 buildUserPrompt 提供基础配置
-  - **新增** config.js 中的 ENGLISH_PROMPT_REQUIREMENT 为英文提示词生成提供支持
-  - **新增** config.js 中的系统提示词模板包含完整的结构化提示数据格式定义
+  - config.js 中的 BASE_USER_PROMPT 和 USER_PROMPT_PRESETS 为 buildUserPrompt 提供基础配置
+  - config.js 中的 ENGLISH_PROMPT_REQUIREMENT 为英文提示词生成提供支持
+  - config.js 中的系统提示词模板包含完整的结构化提示数据格式定义
 - 权限与 API
   - manifest.json 声明 contextMenus、storage、sidePanel、activeTab 权限，支持右键菜单、本地存储、侧边栏与活动标签页操作
 - 模块耦合
   - background.js 与 content.js 通过消息通道强耦合，但职责清晰：前者负责后台逻辑与模型调用，后者负责 UI 与用户交互
   - options.js 与 options.html 通过 chrome.storage 与 runtime 通信，负责设置持久化与历史记录展示
-  - **新增** options.js 与 background.js 在提示词构建逻辑上保持一致性
-  - **新增** content.js 与 background.js 在结构化提示数据处理上保持完全一致
+  - options.js 与 background.js 在提示词构建逻辑上保持一致性
+  - content.js 与 background.js 在结构化提示数据处理上保持完全一致
 
 ```mermaid
 graph LR
@@ -545,15 +543,15 @@ CFG --> OPT
 - IndexedDB 优化
   - 使用事务批量操作，避免重复查询
   - 自动清理超出限制的历史记录，保持数据库大小可控
-- **新增** 增强的结构化数据处理
+- 增强的结构化数据处理
   - normalizePromptResult 函数提供高效的 JSON 解析和数据清洗
   - 支持多种 JSON 格式输入，包括 Markdown 代码块包装
   - 提供完善的字段验证和错误处理机制
-- **新增** 智能提示词堆叠
+- 智能提示词堆叠
   - buildUserPrompt 函数避免了重复的基础提示词，减少了请求体大小
   - 支持场景预设的智能识别，提高 AI 生成的针对性和准确性
   - ENGLISH_PROMPT_REQUIREMENT 确保英文提示词的生成，提升多语言支持
-- **新增** 英文提示词支持
+- 英文提示词支持
   - 通过 ENGLISH_PROMPT_REQUIREMENT 配置确保英文提示词字段的生成
   - 支持多语言界面的提示词显示和编辑
 
@@ -567,9 +565,9 @@ CFG --> OPT
   - 超时：降低 maxImageEdge 或改善网络环境
   - JSON 解析失败：调整 system prompt，确保输出纯 JSON
   - 缺失字段：确保返回包含 zh/en 字段
-  - **新增** 结构化数据处理错误：检查 JSON 格式是否符合规范，确认包含必要的字段
-  - **新增** 智能堆叠逻辑错误：检查 USER_PROMPT_PRESETS 配置是否正确
-  - **新增** 英文提示词生成错误：确认 ENGLISH_PROMPT_REQUIREMENT 配置生效
+  - 结构化数据处理错误：检查 JSON 格式是否符合规范，确认包含必要的字段
+  - 智能堆叠逻辑错误：检查 USER_PROMPT_PRESETS 配置是否正确
+  - 英文提示词生成错误：确认 ENGLISH_PROMPT_REQUIREMENT 配置生效
   - IndexedDB 错误：检查浏览器存储权限与数据库版本兼容性
   - PostHog 集成失败：验证项目密钥与主机配置
 - 用户提示映射
@@ -584,7 +582,7 @@ CFG --> OPT
 ## 结论
 background.js 以清晰的服务工作者架构与职责分离实现了完整的图片提示词生成链路：从扩展初始化、右键菜单与快捷键触发，到图片获取与压缩、AI 模型调用、结果归一化与 UI 推送，再到 IndexedDB 历史记录与 PostHog 分析事件上报。其错误分类与用户提示机制提升了用户体验，而统一的图片处理与请求管理保障了稳定性与性能。
 
-**最新更新** 增强的 normalizePromptResult 函数实现了完整的结构化提示数据处理，支持 zh/en 正面提示词、negative_zh/negative_en 负面提示词和 parameters 参数对象的标准化处理。该函数提供了智能 JSON 解析、数据清洗和字段验证功能，显著提升了提示词数据的完整性和可用性。同时，content.js 中也实现了相同的结构化数据处理逻辑，确保前后端的一致性和数据完整性。
+增强的 normalizePromptResult 函数实现了完整的结构化提示数据处理，支持 zh/en 正面提示词、negative_zh/negative_en 负面提示词和 parameters 参数对象的标准化处理。该函数提供了智能 JSON 解析、数据清洗和字段验证功能，显著提升了提示词数据的完整性和可用性。同时，content.js 中也实现了相同的结构化数据处理逻辑，确保前后端的一致性和数据完整性。
 
 新增的智能堆叠逻辑（buildUserPrompt 函数）实现了场景预设的自动识别和组合，通过 ENGLISH_PROMPT_REQUIREMENT 配置确保英文提示词的生成，显著提升了生成质量和多语言支持。这些改进使得扩展能够更好地适应不同的使用场景和用户需求。
 
@@ -596,14 +594,14 @@ background.js 以清晰的服务工作者架构与职责分离实现了完整的
   - options.html 提供 UI 布局与样式，支持多语言切换
 - 侧边栏与悬浮按钮
   - background.js 通过 sidePanel API 控制侧边栏行为；content.js 实现悬浮按钮与主面板 UI
-- **新增** 结构化提示数据格式
+- 结构化提示数据格式
   - config.js 中的系统提示词模板定义了完整的结构化提示数据格式
   - 支持多语言提示词、负面提示词和参数对象的标准化输出
-- **新增** 提示词配置
+- 提示词配置
   - config.js 中的 BASE_USER_PROMPT 提供基础提示词模板
   - USER_PROMPT_PRESETS 提供多种场景预设，支持智能堆叠逻辑
   - ENGLISH_PROMPT_REQUIREMENT 确保英文提示词的生成
-- **新增** 智能堆叠逻辑实现
+- 智能堆叠逻辑实现
   - background.js 中的 buildUserPrompt 函数实现智能提示词组合
   - options.js 中的智能堆叠逻辑确保前后端一致性
 
