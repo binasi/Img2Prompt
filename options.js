@@ -412,7 +412,7 @@ function createHistoryItem(item) {
   
   div.innerHTML = `
     ${imageHtml}
-    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;">
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
         <div style="font-size: 11px; color: rgba(255,255,255,0.4);">${time}</div>
         <div style="display: flex; gap: 4px;">
@@ -420,14 +420,14 @@ function createHistoryItem(item) {
           <button type="button" class="history-delete-btn" data-id="${item.id}" style="border: 0; border-radius: 4px; padding: 3px 8px; font-size: 10px; font-weight: 600; cursor: pointer; background: rgba(255,107,107,0.15); color: #ff6b6b; transition: all 150ms ease;" data-i18n="historyDelete">删除</button>
         </div>
       </div>
-      <div title="${escapeHtml(zhPrompt)}" style="font-size: 12px; color: rgba(255,255,255,0.85); line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-        <span style="color: #8bd3ff; font-weight: 600;">中文:</span> ${escapeHtml(zhPrompt)}
+      <div title="${escapeHtml(zhPrompt)}" style="min-width: 0; font-size: 12px; color: rgba(255,255,255,0.85); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        <span style="color: #8bd3ff; font-weight: 600;">中文:</span> ${escapeHtml(truncateText(zhPrompt))}
       </div>
-      <div title="${escapeHtml(enPrompt)}" style="font-size: 11px; color: rgba(255,255,255,0.68); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-        <span style="color: #f09cc0; font-weight: 600;">EN:</span> ${escapeHtml(enPrompt)}
+      <div title="${escapeHtml(enPrompt)}" style="min-width: 0; font-size: 11px; color: rgba(255,255,255,0.68); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        <span style="color: #f09cc0; font-weight: 600;">EN:</span> ${escapeHtml(truncateText(enPrompt))}
       </div>
-      <div title="${escapeHtml(jsonPrompt)}" style="font-size: 11px; color: rgba(255,255,255,0.56); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-        <span style="color: #f7d774; font-weight: 600;">JSON:</span> ${escapeHtml(jsonPrompt)}
+      <div title="${escapeHtml(jsonPrompt)}" style="min-width: 0; font-size: 11px; color: rgba(255,255,255,0.56); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        <span style="color: #f7d774; font-weight: 600;">JSON:</span> ${escapeHtml(truncateText(jsonPrompt))}
       </div>
     </div>
   `;
@@ -479,6 +479,12 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+function truncateText(text, maxLength = 60) {
+  const str = String(text || "").replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  if (str.length <= maxLength) return str;
+  return str.slice(0, maxLength) + "...";
 }
 
 async function loadHistoryItem(item) {
